@@ -29,11 +29,35 @@ typedef struct
 	uint8_t ModGsP; //ModGsPReg
 //    uint8_t rfu[3];
 }MIFS_REG;
+
+typedef struct
+{
+    int     ProductType; //产品参照gProductType
+    int     RFtype;      //非接芯片类型参照RFIDModule
+    MIFS_REG RFpara; 
+}s_MIFS_REG_table;
 #ifdef EM_PN512_Module
 extern MIFS_REG gcMifReg;
 #endif
 
+typedef struct 
+{
+    uint8_t gTypeBmodule;  //AS3911_REG_RFO_AM_ON_LEVEL type b调制深度
+    uint8_t gTypeArec;     //AS3911_REG_RX_CONF3  type a 接收灵敏度
+    uint8_t gTypeBrec;     //AS3911_REG_RX_CONF3  type b 接收灵敏度
+	uint8_t rfu;
+}s_3911REG_info;
 
+typedef struct
+{
+    int     ProductType; //产品参照gProductType
+    int     RFtype;      //非接芯片类型参照RFIDModule
+    s_3911REG_info RFpara; 
+}s_3911REG_table;
+
+#ifdef EM_AS3911_Module
+extern s_3911REG_info gas3911Reg;
+#endif
 /***********************************************************************
                             常量定义
 ************************************************************************/

@@ -12,6 +12,7 @@
 
 #ifdef CFG_LOWPWR
 //31.5
+int g_test_pow = 0;
 const struct LpwrDevice gcLpwrDevice = {
 #if (defined CFG_RFID)
     .rfid = 
@@ -149,6 +150,13 @@ const struct LpwrDevice gcLpwrDevice = {
         {UART2_RXD, LPWR_GPIO_IN,  LPWR_LEVEL_LOW, 0, LPWR_MODE_INPUT_UP},
     },
 
+    .uart4 =
+    {
+        {UART4_TXD, LPWR_GPIO_OUT, LPWR_LEVEL_HIGHT, 0, LPWR_MODE_OUTPUT},
+        {UART4_RXD, LPWR_GPIO_IN,  LPWR_LEVEL_LOW, 0, LPWR_MODE_INPUT_UP},
+    
+    }
+
 };
 
 void lpwr_gpio_opt(uint8_t term,struct LpwrGpioMode *opt)
@@ -232,10 +240,14 @@ void lpwr_set_gpio(void)
     TRACE("\n-|ctp");
     lpwr_gpio_opt(sizeof(struct LpwrCTP)/sizeof(struct LpwrGpioMode),
                   (struct LpwrGpioMode *)&gcLpwrDevice.ctp);
+    TRACE("\n-|uart4");
+//    ctc_uart_close();
+//    drv_dma_stop();
+//    lpwr_gpio_opt(sizeof(struct LpwrUART2)/sizeof(struct LpwrGpioMode),
+//                  (struct LpwrGpioMode *)&gcLpwrDevice.uart4);
     TRACE("\n-|uart2");
     lpwr_gpio_opt(sizeof(struct LpwrUART2)/sizeof(struct LpwrGpioMode),
                   (struct LpwrGpioMode *)&gcLpwrDevice.uart2);
-
 #endif
 }
 void wakeup_ctrl_init(void)
@@ -267,7 +279,9 @@ void wakeup_ctrl_init(void)
 extern uint16_t rfcard_module_open(void);
 void lwpr_device_reinit(void)
 {
-
+//    ctc_uart_restart();
+//    drv_uart_init(UART4);
+//    ctc_uart_open();
 #ifdef CFG_LOWPWR
     wakeup_ctrl_init();
 
@@ -301,7 +315,6 @@ void lwpr_device_reinit(void)
         hw_uart_init(CNL_COMPORT,CNL_BAUD);
     }
 #endif
-
 #endif
 }
 
@@ -366,6 +379,16 @@ void enter_lowerpower_wait(void)
 #endif
 }
 
+void lwpr_pherip_close(void)
+{
+    ctc_uart_close();
+}
+
+void lwpr_pherip_reopen(void)
+{
+    ctc_uart_open();
+}
+
 void enter_lowerpower_freq(void)
 {
 #ifdef CFG_LOWPWR
@@ -376,23 +399,32 @@ void enter_lowerpower_freq(void)
     if (PEE != what_mcg_mode()) {
         return;
     }
+//    lwpr_pherip_close();
     mcg_clk_hz  = pee_pbe(CLK0_FREQ_HZ);
     mcg_clk_hz  = pbe_blpe(CLK0_FREQ_HZ);
     SIM_CLKDIV1 = SIM_CLKDIV1_OUTDIV1(CLK_VLPR_DIV1)|SIM_CLKDIV1_OUTDIV2(CLK_VLPR_DIV2)|SIM_CLKDIV1_OUTDIV4(CLK_VLPR_DIV4);
     cpu_clk_refresh();
     lwpr_pherip_reinit();
-    enter_vlpr(0);
-    lpwr_set_gpio();
+//    enter_vlpr(0);
     lwpr_pherip_reinit();
+//    lpwr_set_gpio();
+//    hw_led_on(S_LED_RED);
     gSystem.lpwr.bm.low_flag = 1;
+//    g_test_pow = 0;
+//    TRACE("\r\n-----------------------");
+//    while ( g_test_pow == 0 ) {
+//    }
+
 #endif
 }
+
 
 void exit_lowerpower_freq(void)
 {
 #ifdef CFG_LOWPWR
     
-    gSystem.lpwr.bm.low_en = 0; //有按检测到按键 则不可进入休眠 等待休眠指令
+//    gSystem.lpwr.bm.low_en = 0; //有按检测到按键 则不可进入休眠 等待休眠指令
+//    TRACE("gpio lever trigger\r\n");
    
     if(gSystem.lpwr.bm.low_flag == 0) //未进入休眠
     {
@@ -402,7 +434,7 @@ void exit_lowerpower_freq(void)
     if (BLPE != what_mcg_mode()) {
         return;
     }
-    exit_vlpr();
+//    exit_vlpr();
 
     SIM_CLKDIV1 = ( 0
                     | SIM_CLKDIV1_OUTDIV1(0)    //Core/system       120 Mhz
@@ -414,9 +446,14 @@ void exit_lowerpower_freq(void)
     mcg_clk_hz = pbe_pee(CLK0_FREQ_HZ);
     cpu_clk_refresh();
     lwpr_pherip_reinit();
+    TRACE("-1");
     lwpr_device_reinit();
     gSystem.lpwr.bm.low_flag = 0;
     gSystem.lpwr.bm.low_to_normal = 1;
+    TRACE("-2");
+    lwpr_pherip_reopen();
+    TRACE("-3");
+//    hw_led_off(S_LED_RED);
 #endif
 }
 
@@ -529,6 +566,8 @@ void LowPower_Wakeup_IRQHandler(void)
     if (PORTx_IRQPinx(POWER_WAKE_UP_PORT,POWER_WAKE_UP_PINx)) {
         PORTx_IRQPinx_Clear(POWER_WAKE_UP_PORT,POWER_WAKE_UP_PINx);
         exit_lowerpower_freq(); 
+        TRACE("\r\n****");
+        g_test_pow = 1;
     }
 
 }

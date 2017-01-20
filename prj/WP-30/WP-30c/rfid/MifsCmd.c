@@ -174,6 +174,7 @@ uchar EI_mifs_ucHandleCmd(uchar cmd)
         timeout = timeout;
 
         int error;
+        timer0 = 0;
         error = emvHalTransceive((u8 *)EG_mifs_tWorkInfo.aucBuffer, EG_mifs_tWorkInfo.ulSendBytes, 
                                         EG_mifs_tWorkInfo.aucBuffer, EG_mifs_tWorkInfo.expectMaxRec, (size_t *)&timer0, 
                                         EG_mifs_tWorkInfo.ulTimeout, (EmvHalTransceiveMode_t)cmd);
@@ -1177,7 +1178,9 @@ void EI_vMifsHisr(void)
         ulTemp = ulTemp;
         Data = Data;
 #ifdef EM_AS3911_Module
+        #if AS3911_IRQMODE
         as3911Isr();
+        #endif
 #endif
 
     }

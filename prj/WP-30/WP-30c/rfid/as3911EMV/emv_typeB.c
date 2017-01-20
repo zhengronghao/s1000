@@ -171,14 +171,14 @@ s16 emvTypeBAnticollision(EmvPicc_t *picc)
     else if (picc->fsci > 8)
         picc->fsci = 8;
 
-    /* Parse and check ISO14443-4 conformance bit. */
-    if ((atqb[10] & 0x01) != 0x01)
+    /* Parse and check ISO14443-4 conformance bit and b4 bit. */
+    if ((atqb[10] & 0x09) != 0x01) // TB304 修改  cf20140418
         return EMV_ERR_PROTOCOL;
 
     /* Parse and check FWI. */
     picc->fwi = atqb[11] >> 4;
-    if (picc->fwi > EMV_FWI_MAX_PCD)
-        return EMV_ERR_PROTOCOL;
+    if (picc->fwi > EMV_FWI_MAX_PCD) //TB201 增加0x0f测试案例  cf20140418
+        picc->fwi = EMV_FWI_DEFAULT;
 
     /* Parse and check SFGI. */
     if (responseLength == (13 + 2))
@@ -187,7 +187,7 @@ s16 emvTypeBAnticollision(EmvPicc_t *picc)
         picc->sfgi = atqb[12] >> 4;
 
         if (picc->sfgi > EMV_SFGI_MAX_PCD)
-            return EMV_ERR_PROTOCOL;
+            picc->sfgi = EMV_SFGI_DEFAULT;
     }
     else
         picc->sfgi = EMV_SFGI_DEFAULT;
@@ -225,7 +225,12 @@ s16 emvTypeBActivation(EmvPicc_t *picc)
     gemvcardinfo.cardtype = 2;
 
     /* Calculate timeout from FWI in milliseconds. */
-    timeoutInCarrierCycles = (U32_C(4096) + 384) << picc->fwi;
+    
+    /* EMV_DELTA_FWT_PCD needs to be added and not shifted by FWI
+     * See: Table A.5 Annex A.4, change request 10.3.5.5 and 10.3.5.8 */
+
+//    timeoutInCarrierCycles = (U32_C(4096) + 384) << picc->fwi;
+    timeoutInCarrierCycles = EMV_CONVERT_FWT_TO_CARRIER_CYCLES(picc->fwi) + EMV_DELTA_FWT_PCD;
 
     error = emvPrelayer4Transceive(attrib, 9, response, sizeof(response), &responseLength,
                 timeoutInCarrierCycles, EMV_HAL_TRANSCEIVE_WITH_CRC);
@@ -266,6 +271,10 @@ s16 emvTypeBRemove(EmvPicc_t *picc)
     numWupbWithoutResponse = 0;
     while (numWupbWithoutResponse < 3)
     {
+        if(kb_hit())//cf20140423
+        {
+            return EMV_ERR_STOPPED;
+        }    
         if ( IfInkey(0)) {
             Dprintk("--type b remove 99 to exit");
             if ( InkeyCount(0) == 99 ) {
@@ -287,6 +296,7 @@ s16 emvTypeBRemove(EmvPicc_t *picc)
             numWupbWithoutResponse++;
     }
 
+    emvHalResetField(); //延时在poll中已做6ms延时
     return EMV_ERR_OK;
 }
 

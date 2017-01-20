@@ -611,6 +611,7 @@ int fac_function_test_and_charging(void *module)
     return ret;
 }
 
+#ifdef DEBUG_Dx
 void test_android(void)
 {
 
@@ -657,5 +658,5 @@ void test_android(void)
         }
     }
 }
-
+#endif
 

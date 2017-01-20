@@ -147,6 +147,20 @@ void DMA_DisableRequest(uint8_t chl)
     DMA_BASE_PTR->CERQ = DMA_CERQ_CERQ(chl);
 }
 
+void DMA_DisableClock(void)
+{
+#if defined(DMAMUX0)  
+    SIM->SCGC6 &= (~SIM_SCGC6_DMAMUX0_MASK);
+#endif
+#if  defined(DMAMUX1)
+    SIM->SCGC6 &= (~SIM_SCGC6_DMAMUX1_MASK);
+#endif
+#if  defined(DMAMUX)
+    SIM->SCGC6 &= (~SIM_SCGC6_DMAMUX_MASK);
+#endif
+    SIM->SCGC7 &= (~SIM_SCGC7_DMA_MASK);
+}
+
 void DMA_EnableAutoDisableRequest(uint8_t chl , bool flag)
 {
     if(flag)

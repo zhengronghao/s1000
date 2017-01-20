@@ -1790,7 +1790,7 @@ int fac_main (int mode)
     }
     else
     {
-        gSystem.lpwr.bm.enable = 1;
+//        gSystem.lpwr.bm.enable = 1;
     }
     
     

@@ -51,6 +51,8 @@
 #define AS3911_SPI_CMD_WRITE_FIFO       (0x80)
 #define AS3911_SPI_CMD_DIREC_CMD        (0xC0)
 
+#define AS3911_IO_MAX_CHAINED_DIRECT_COMMANDS   (10)
+
 /*
 ******************************************************************************
 * MACROS
@@ -60,6 +62,7 @@
 //#define AS3911_SEN_ON() { _LATB8 = 0; }
 //#define AS3911_SEN_OFF() { _LATB8 = 1; }
 //#define as3911_SPI_RFID_ID     SPI_ID_1
+/* FIXME: remove macros and references in the code once CS from the SPI module works. */
 #define AS3911_SEN_ON()        //hw_gpio_reset_bits(GPIOE,GPIO_Pin_4)//SPI_SetCS(RFID_SPIn,SPIBUS0_RFID,ON)//set_pio_output(BOARD_PIN_SPI0_CS3_RF, 0)
 #define AS3911_SEN_OFF()       //hw_gpio_set_bits(GPIOE,GPIO_Pin_4)//SPI_SetCS(RFID_SPIn,SPIBUS0_RFID,OFF)//set_pio_output(BOARD_PIN_SPI0_CS3_RF, 1)
 #define AS3911_CloseIsr()      s_Rfid_SetInt(OFF)//s_CloseIsr()
@@ -267,6 +270,86 @@ char as3911ExecuteCommand(uchar directCommand)
 	AS3911_SEN_OFF();
     AS3911_OpenIsr();
     return 0;
+}
+
+char as3911ExecuteCommands(uchar *directCommands, uchar length)
+{
+//    s8 error = ERR_NONE;
+    uchar index = 0;
+    u8 as3911DirectCommands[AS3911_IO_MAX_CHAINED_DIRECT_COMMANDS];
+    
+    /* FIXME: Check for better error code for internal buffer overflow. */
+    if (length > AS3911_IO_MAX_CHAINED_DIRECT_COMMANDS)
+        return ERR_IO;
+    
+    for (index = 0; index < length; ++index)
+        as3911DirectCommands[index] = AS3911_SPI_CMD_DIREC_CMD | (directCommands[index] & AS3911_SPI_ADDRESS_MASK);
+    
+    AS3911_CloseIsr();
+	AS3911_SEN_ON();
+    for (index = 0; index < (length-1); ++index)
+        spi_exchange_block_EX(as3911DirectCommands[index],0);
+    spi_exchange_block_EX(as3911DirectCommands[index],1);
+	AS3911_SEN_OFF();
+    AS3911_OpenIsr();
+    
+//    if (ERR_NONE != error)
+//        return ERR_IO;
+//    else
+//        return ERR_NONE;
+    return 0;
+}
+/*! 
+ *****************************************************************************
+ *  \brief  Executes a direct command and returns the result
+ *
+ *  This function executes the direct command given by \a cmd waits for
+ *  \a sleeptime and returns the result read from register \a resreg.
+ *
+ *  \param[in] cmd: direct command to execute.
+ *  \param[in] resreg: Address of the register containing the result.
+ *  \param[in] sleeptime: time in milliseconds to wait before reading the result.
+ *  \param[out] result: 8 bit long result
+ *
+ *  \return ERR_IO : Error during communication with AS3911.
+ *  \return ERR_NONE : No error, result of direct command written to \a result.
+ *
+ *****************************************************************************
+ */
+s8 as3911ExecuteCommandAndGetResult(u8 cmd, u8 resreg, u8 sleeptime, u8* result)
+{
+    s8 err;
+    u32 irqs;
+
+    if (cmd == AS3911_CMD_ADJUST_REGULATORS)
+    {
+        err = as3911ExecuteCommand(cmd);
+        sleepMilliseconds(sleeptime);
+    }
+    else if (   (cmd >= AS3911_CMD_INITIAL_RF_COLLISION && cmd <= AS3911_CMD_RESPONSE_RF_COLLISION_0)
+            || (cmd == AS3911_CMD_MEASURE_AMPLITUDE)
+            || (cmd >= AS3911_CMD_ADJUST_REGULATORS && cmd <= AS3911_CMD_MEASURE_PHASE)
+            || (cmd >= AS3911_CMD_CALIBRATE_C_SENSOR && cmd <= AS3911_CMD_MEASURE_VDD)
+            || (cmd >= 0xFD && cmd <= 0xFE )
+       )
+    {
+        as3911EnableInterrupts(AS3911_IRQ_MASK_DCT);
+        as3911GetInterrupts(AS3911_IRQ_MASK_DCT, &irqs);
+        err = as3911ExecuteCommand(cmd);
+        as3911WaitForInterruptTimed(AS3911_IRQ_MASK_DCT, sleeptime, &irqs);
+        as3911DisableInterrupts(AS3911_IRQ_MASK_DCT);
+    }
+    else
+    {
+        err = as3911ExecuteCommand(cmd);
+        sleepMilliseconds(sleeptime);
+    }
+
+    /* read out the result if the pointer is not NULL */
+    if (result)
+        err |= as3911ReadRegister(resreg, result);
+
+    return err;
 }
 
 /*

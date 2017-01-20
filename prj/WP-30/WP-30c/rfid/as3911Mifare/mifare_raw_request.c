@@ -200,8 +200,8 @@ s8 mifareSendRawRequest(const parity_data_t *request,
     /* Wait for the frame delay time to pass. */
     while (1)
 	{
-		as3911ReadRegister(AS3911_REG_VSS_REGULATOR_RESULT, &aux);
-		if (!(aux & 0x04))
+		as3911ReadRegister(AS3911_REG_REGULATOR_RESULT, &aux);
+		if (!(aux & AS3911_REG_REGULATOR_RESULT_gpt_on))
 			break;
 	}
 

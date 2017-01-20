@@ -439,6 +439,8 @@ int frame_integrity_check(uint8_t *data, uint32_t size, int *s_pos, int *e_pos)
 
 #if 1
 /* 指令完整性校验*/
+extern uint32 g_Heartbeat_Timer;
+extern uint32_t sys_get_counter(void);
 int frame_integrity_check(uint8_t *data, uint32_t size, int *s_pos, int *e_pos)
 {
 	uint32_t start = 0,end = 0;
@@ -464,6 +466,10 @@ int frame_integrity_check(uint8_t *data, uint32_t size, int *s_pos, int *e_pos)
     
 	if(end==0 && data[end]!= CTC_ETX) return RET_NOCTC_ETX;
 	*e_pos=end;
+#ifdef CFG_LOWPWR
+// 说明接收数据的完整性已经通过，记录心跳包的时间
+    g_Heartbeat_Timer = sys_get_counter();
+#endif
 	return RET_OK;
 }
 #endif

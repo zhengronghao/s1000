@@ -421,6 +421,7 @@ uint8_t KB_GetPINStr(uint8_t mode, uint8_t ucMinLen, uint8_t ucMaxLen, uint32_t 
     TRACE("------------------timeout:%d\r\n", uiTimeOut);
     // 确保打开dma准备接收数据
     ctc_uart_restart();
+    ctc_dmaqueue_init();
     memset(gwp30SysBuf_c.work, 0, sizeof(gucBuff));
     
     dispinfo.tone = mode & 0x01;

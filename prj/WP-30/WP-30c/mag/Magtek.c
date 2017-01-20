@@ -823,16 +823,21 @@ int mag_magtek_main (int mode)
                     }
                 //    enter_lowerpower_freq();
 //                    PPRT_Send(CMD_READ_MAGCARD,(uchar *)ptTrk1,sizeof(ET_MAGCARD)*3);
-                    ctc_mag_report((uchar *)ptTrk1); 
+//                    ctc_mag_report((uchar *)ptTrk1); 
+                    
                 } else {
+                    ptTrk1->ucTrkFlag = EM_mag_NULL;
+                    ptTrk2->ucTrkFlag = EM_mag_NULL;
+                    ptTrk3->ucTrkFlag = EM_mag_NULL;
 //                    enter_lowerpower_freq();
 //                    PPRT_Send(CMD_READ_MAGCARD,(uchar *)&ret,1);
                 } 
-                magtek_reset();
-                mag_magtek_close(0);
+                    ctc_mag_report((uchar *)ptTrk1); 
+                    magtek_reset();
+                    mag_magtek_close(0);
                 // 异步上报上报数据完关闭检测，等待下次open
-                gMagAsynStat = 0;
-                CLR_IO(DEBUG_PIN2);
+                    gMagAsynStat = 0;
+                    CLR_IO(DEBUG_PIN2);
             } 
         } else if (sys_get_counter() - gMagTeckTimeout > 2000){
             SET_IO(DEBUG_PIN2);

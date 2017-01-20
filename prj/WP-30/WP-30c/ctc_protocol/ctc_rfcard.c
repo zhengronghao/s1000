@@ -195,8 +195,8 @@ uint16_t rfcard_poll_powerup(uint32_t* len, uint8_t* buffer)
     TRACE("\r\nrfcard_poll + power up");    
 
       *len = 0;
-      //mode = RFID_MODE_EMV;  
-      mode = RFID_MODE_ISO;  
+      mode = RFID_MODE_EMV;  
+//      mode = RFID_MODE_ISO;  
       
       rfid_powerdown();
     
@@ -207,6 +207,9 @@ uint16_t rfcard_poll_powerup(uint32_t* len, uint8_t* buffer)
           if(ret == -RFID_ERRPARAM)
           {
               return CMDST_PARAM_ER;
+          }else if (ret == -RFID_MULTIERR)
+          {
+              return CMDST_RF_MULCARD_ER;
           }
           return CMDST_RF_POLL_ER;
       }
@@ -218,6 +221,9 @@ uint16_t rfcard_poll_powerup(uint32_t* len, uint8_t* buffer)
           if(ret == -RFID_ERRPARAM)
           {
               return CMDST_PARAM_ER;
+          }else if (ret == -RFID_MULTIERR)
+          {
+              return CMDST_RF_MULCARD_ER;
           }
           return CMDST_RF_POLL_ER;
       }
@@ -247,6 +253,7 @@ uint16_t rfcard_exchange_apdu(uint8_t sed_len,uint8_t* data,uint32_t* rev_len,ui
         
         if(ret != RFID_SUCCESS)
         {
+            TRACE("get the rifd ret:%x\r\n", ret);
             if(ret == -RFID_ERRPARAM)
             {
                 return CMDST_PARAM_ER;
@@ -285,6 +292,9 @@ uint16_t rfcard_poll(void)
           if(ret == -RFID_ERRPARAM)
           {
               return CMDST_PARAM_ER;
+          }else if (ret == -RFID_MULTIERR)
+          {
+              return CMDST_RF_MULCARD_ER;
           }
           return CMDST_RF_POLL_ER;
       }
@@ -317,6 +327,9 @@ uint16_t rfcard_card_open(uint32_t* len, uint8_t* buffer)
           if(ret == -RFID_ERRPARAM)
           {
               return CMDST_PARAM_ER;
+          }else if (ret == -RFID_MULTIERR)
+          {
+              return CMDST_RF_MULCARD_ER;
           }
           return CMDST_RF_POLL_ER;
       }

@@ -198,6 +198,7 @@ s8 as3911WaitForInterruptTimed(u32 mask, u16 timeout, u32 *irqs)
     if (timeout > 0)
         timer0 = sys_get_counter();
 
+#if AS3911_IRQMODE
     do
     {
         irqStatus = as3911InterruptStatus & mask;
@@ -215,6 +216,34 @@ s8 as3911WaitForInterruptTimed(u32 mask, u16 timeout, u32 *irqs)
             }
         }
     } while (!irqStatus && !timerExpired);
+#else
+    uint irqStatusISR,tmp;
+    do
+    {
+        if (1 == hw_gpio_get_bit(RFID_IO_GPIO,(1<<RFID_IO_PINx)))
+        {
+
+            as3911ContinuousRead(AS3911_REG_IRQ_MAIN, (u8*) &irqStatusISR, 3);
+
+            D2(LABLE(0xAA);//1us
+               DATAIN((irqStatusISR));
+               DATAIN((irqStatusISR>>8));
+               DATAIN((irqStatusISR>>16));
+              );
+
+            tmp = irqStatusISR & as3911InterruptMask;
+            as3911InterruptStatus |= tmp;
+        }
+        irqStatus = as3911InterruptStatus & mask;
+
+        if ( timeout > 0 ) {
+            if(as3911_timerout(timer0,timeout))
+            {
+                timerExpired = ON;
+            }
+        }
+    } while (!irqStatus && !timerExpired);
+#endif
 
     irqMasktmp = irqStatus;
     AS3911_IRQ_OFF();
@@ -246,46 +275,45 @@ void as3911Isr(void)
     uint irqStatus = 0;
     uint tmp = 0;
     volatile uint timer;
+    static u8 lastIntHadNRE = 0;
 
 //    GPIO_ResetBits(GPIOB,GPIO_Pin_1);
 //    s_DelayUs(20);
 //    TRACE("\r\n--------------------i\r\n");
 //    count = 0;
 //    SETSIGNAL_H();
-#if 0 
-    do
+#if 11
+    while (1 == hw_gpio_get_bit(RFID_IO_GPIO,(1<<RFID_IO_PINx)))
     {
-//        AS3911_IRQ_CLR();
-
         as3911ContinuousRead(AS3911_REG_IRQ_MAIN, (u8*) &irqStatus, 3);
-
-//        SETSIGNAL2_H();
-        for ( timer = 0 ; timer < 20 ; timer++ ) {
-            //3.62us
-            ;
-        }
-        
         D2(LABLE(0xAA);//1us
            DATAIN((irqStatus));
            DATAIN((irqStatus>>8));
            DATAIN((irqStatus>>16));
         );
-//        SETSIGNAL2_L();
-
 //        as3911InterruptStatus |= irqStatus & as3911InterruptMask;
         tmp = irqStatus & as3911InterruptMask;
         as3911InterruptStatus |= tmp;
-//        count++;
-//        if ( count >= 10000) {
-//            count--;
-//            TRACE("\r\n ============== irq error!!");
-//        }
-//        if ( IfInkey(0) ) {
-//            TRACE("\r\n ============== irq error:%d!!",count);
-//            InkeyCount(0);
-//        }
-    //    TRACE("\r\n Isr %06X|[%08X]=%08X", irqStatus, as3911InterruptMask, as3911InterruptStatus);
-    } while (1 == check_pio_input(BOARD_PIN_RF_INT));
+       	if (irqStatus & AS3911_IRQ_MASK_NRE)
+       	{
+       		if (lastIntHadNRE == 2)
+       		{
+       			u8 reg;
+       			as3911ReadRegister(AS3911_REG_GPT_CONTROL, &reg);
+       			as3911WriteRegister(AS3911_REG_GPT_CONTROL, reg & ~AS3911_REG_GPT_CONTROL_nrt_emv);
+       			as3911ExecuteCommand(AS3911_CMD_CLEAR_FIFO);
+       			as3911WriteRegister(AS3911_REG_GPT_CONTROL, reg);
+       		}
+			else if (lastIntHadNRE == 1)
+       			lastIntHadNRE = 2;
+       		else
+       			lastIntHadNRE = 1;
+    	}
+       	else
+       	{
+       		lastIntHadNRE = 0;
+       	}
+    }
 
 #else
 

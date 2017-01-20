@@ -68,6 +68,11 @@
 #define EMV_PCB_BLOCK_NUMBER_MASK   0x01
 /*! Bitmask for the WTXM bits of the inf byte of an WTX request or response. */
 #define EMV_WTXM_MASK               0x3F
+/*! Bitmask for the RFU bits in the WTXM. */
+#define EMV_WTXM_MBZ_MASK           0xC0
+/*! RFU bits in the WTXM. */
+#define EMV_WTXM_MBZ                0x00
+
 /*!
  *****************************************************************************
  * Maximum allowed value for the WTXM of an WTX request. If a value above
@@ -166,7 +171,7 @@ static u8 emvBlockBuffer[EMV_FSD_MIN_PCD];
  * response APDU.
  *****************************************************************************
  */
- static s16 emvTransceiveBlock(u8 pcb, const u8 *inf, size_t infLength,
+static s16 emvTransceiveBlock(u8 pcb, const u8 *inf, size_t infLength,
     u8 *response, size_t maxResponseLength, size_t *responseLength,
     enum EMVRetransmissionRequestType retransmissionRequestType);
 
@@ -412,8 +417,12 @@ static s16 emvTransceiveBlock(u8 pcb, const u8 *inf, size_t infLength,
         emvBlockBuffer[1 + index] = inf[index];
 
     /* Calculate frame wait time */
-    fwtInCarrierCycles = (4096L + 384) << emvPicc->fwi;
+//    fwtInCarrierCycles = (4096L + 384) << emvPicc->fwi;
 
+    /* DELTA_FTW needs to be added and not shifted by FWI
+     * See: Table A.5 Annex A.4, change request 10.3.5.5 and 10.3.5.8 */
+    fwtInCarrierCycles = EMV_CONVERT_FWT_TO_CARRIER_CYCLES(emvPicc->fwi) + EMV_DELTA_FWT_PCD;
+    
     error = emvHalTransceive(emvBlockBuffer, infLength + 1, response,
         maxResponseLength , responseLength, fwtInCarrierCycles,
         EMV_HAL_TRANSCEIVE_WITH_CRC);
@@ -477,24 +486,40 @@ static s16 emvTransceiveBlock(u8 pcb, const u8 *inf, size_t infLength,
 
                 requestedWtxm = response[1] & EMV_WTXM_MASK;
 
+                /* Check RFU bits in wtxm
+                 * Requirement 10.1.5.1 in EMVco 2.4: highest 2 bits must be set to 0*/
+                if ((response[1] & EMV_WTXM_MBZ_MASK) != EMV_WTXM_MBZ)
+                {
+                    return EMV_ERR_PROTOCOL;
+                }
+                
                 /* Check validity of wtxm value and adjust range. */
                 if (requestedWtxm == 0)
                     return EMV_ERR_PROTOCOL;
                 else if (requestedWtxm > EMV_MAX_WTXM)
-                    usedWtxm = EMV_MAX_WTXM;
+                    return EMV_ERR_PROTOCOL; // TA404 TA408_8 TA411_10 TA417_6ÐÞ¸Ä cf20140418
                 else
                     usedWtxm = requestedWtxm;
 
                 /* Calculate requested frame wait time in carrier cycles. */
-                fwtInCarrierCycles = ((4096L + 384) << emvPicc->fwi) * usedWtxm;
+//                fwtInCarrierCycles = ((4096L + 384) << emvPicc->fwi) * usedWtxm;
+
+                /* DELTA_FTW needs to be added and not shifted by FWI
+                 * See: Table A.5 Annex A.4, change request 10.3.5.5 and 10.3.5.8 */
+                fwtInCarrierCycles = EMV_CONVERT_FWT_TO_CARRIER_CYCLES(emvPicc->fwi) * usedWtxm + EMV_DELTA_FWT_PCD;
 
                 /* In the EMV standard there is no clear definition on what to do
                  * if the requested FWT_TEMP exceeds FWT_MAX.
                  * But, according to FIME the PCD shall limit FWT_TEMP to FWT_MAX if that
                  * happens.
                  */
-                if (fwtInCarrierCycles > ((4096L + 384) << EMV_FWI_MAX_PCD))
-                    fwtInCarrierCycles = ((4096L + 384) << EMV_FWI_MAX_PCD);
+//                if (fwtInCarrierCycles > ((4096L + 384) << EMV_FWI_MAX_PCD))
+//                    fwtInCarrierCycles = ((4096L + 384) << EMV_FWI_MAX_PCD);
+
+                /* DELTA_FTW needs to be added and not shifted by FWI
+                 * See: Table A.5 Annex A.4, change request 10.3.5.5 and 10.3.5.8 */
+                if (fwtInCarrierCycles > (EMV_CONVERT_FWT_TO_CARRIER_CYCLES(EMV_FWI_MAX_PCD) + EMV_DELTA_FWT_PCD))
+                    fwtInCarrierCycles = (EMV_CONVERT_FWT_TO_CARRIER_CYCLES(EMV_FWI_MAX_PCD) + EMV_DELTA_FWT_PCD);
 
                 swtxResponse[0] = 0xF2;
                 swtxResponse[1] = requestedWtxm;

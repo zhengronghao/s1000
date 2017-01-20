@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -252,6 +252,23 @@ char as3911ReadFifo(uchar *data, uchar length);
  *****************************************************************************
  */
 char as3911ExecuteCommand(uchar directCommand);
+
+/*! \ingroup as3911SpiIo
+ *****************************************************************************
+ * \brief Send a sequence of chained direct commands to the AS3911.
+ * 
+ * \note Please refer to the datasheet to see which direct commands can be
+ *   chained and which not.
+ *   
+ * \param[in] directCommands Array of direct commands to be send.
+ * \param[in] length Number of direct commands stored in \a directCommands.
+ * 
+ * \return ERR_IO: Error during communication.
+ * \return ERR_NONE: No error, Direct commands send successful.
+ *****************************************************************************
+ */
+char as3911ExecuteCommands(uchar *directCommands, uchar length);
+s8 as3911ExecuteCommandAndGetResult(u8 cmd, u8 resreg, u8 sleeptime, u8* result);
 
 char s_as3911WriteRegister(ulong ulLen, uchar ucRegAddr, uchar * pucData);
 char s_as3911ReadRegister(ulong ulLen, uchar ucRegAddr, uchar * pucData);

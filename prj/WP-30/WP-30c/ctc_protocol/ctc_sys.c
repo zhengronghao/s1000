@@ -24,6 +24,7 @@ dl_info sys_dl_info;
 
 #ifdef CFG_LOWPWR
 uint32 Lowpower_Timer;
+uint32 g_Heartbeat_Timer;
 #endif
 
 /*
@@ -344,23 +345,33 @@ uint16_t sys_mdf_status_get(int *status, uchar *time)
  *
  */
 extern void MakeKeyCheck(uchar *in,uint len,uchar *check);   
+extern uint32_t security_level_get(void);
 uint16_t sys_mdf_unlock(void)
 {
-    
     ST_MMAP_KEY ramkey; 
+    int result;
 
-    drv_dryice_init((hal_dry_tamper_t)(DRY_TER_TPE(0x3F)|kDryTamper_Voltage),
-                    (hal_dry_interrupt_t)0,
-                    0x2C,ENABLE);
-    RNG_FillRandom((uint8_t *)&ramkey, MMAP_KEY_LEN);
-    MakeKeyCheck((uchar *)&ramkey,MMAP_KEY_LEN,ramkey.check);
-    memcpy(ramkey.facchk,STR_SRAM,FUN_LEN);
-    TRACE_BUF("dryice mmk",ramkey.aucMMK,32);
-    hw_dryice_write_key((FPOS(ST_MMAP_KEY,aucMMK)>>2),
-                        ((MK_UNIT_LEN+ELRCK_LEN+CHECK_LEN+FUN_LEN)>>2),
-                        (uint32_t *)&ramkey);
+    // 解除防拆，建议在生产使用，当防拆等级设置成功后，不允许通过此方式解锁，只能通过ic卡或鉴权包解锁
+    // 读取原保存在系统中设置的检测防拆点, 如果没有设置过反拆开启默认
+    result = security_level_get();
+    if ((0 == result) || (0xffffffff == result)) {
+        drv_dryice_init((hal_dry_tamper_t)(DRY_TER_TPE(0x3F)|kDryTamper_Voltage),
+                        (hal_dry_interrupt_t)0,
+                        0x2C,ENABLE);
+        RNG_FillRandom((uint8_t *)&ramkey, MMAP_KEY_LEN);
+        MakeKeyCheck((uchar *)&ramkey,MMAP_KEY_LEN,ramkey.check);
+        memcpy(ramkey.facchk,STR_SRAM,FUN_LEN);
+        TRACE_BUF("dryice mmk",ramkey.aucMMK,32);
+        hw_dryice_write_key((FPOS(ST_MMAP_KEY,aucMMK)>>2),
+                            ((MK_UNIT_LEN+ELRCK_LEN+CHECK_LEN+FUN_LEN)>>2),
+                            (uint32_t *)&ramkey);
 
-    return CMDST_OK;
+        return CMDST_OK;
+    }else{
+        TRACE("NO support the way to unlock\r\n");
+        return CMDST_OTHER_ER;
+    }
+
 }
 
 /*
@@ -591,7 +602,6 @@ uint16_t sys_manage_download_finish(uint8_t *data)
 #define CPU_HARAWARE_SECUCHIOP          6   // 国密安全CPU
 
 extern int s_fac_ctrl_get_MBID(uchar *id);
-extern uint32_t security_level_get(void);
 uint16_t sys_cpu_get_inform(uint8_t *data,uint8_t *output,uint32_t *data_len)
 {
     char type; 
@@ -834,8 +844,13 @@ uint sys_write_project_id(uchar *id, int len)
 uint16_t sys_entry_lowpower(uint8_t* data)
 {
     //判断当前是否可以进入休眠
-    gSystem.lpwr.bm.low_en = 1; //收到低功耗指令 时延后可以进入低功耗
-    
+    if ( gSystem.lpwr.bm.low_en == 0) {
+        TRACE("\r\nready for entering sleep\r\n");
+        gSystem.lpwr.bm.low_en = 1; //收到低功耗指令 时延后可以进入低功耗
+        Lowpower_Timer = sys_get_counter(); //低功耗用计时   
+    }else{
+        TRACE("\r\nprocess the sleeping\r\n");
+    }
     return CMDST_OK; 
 }
 /*
@@ -853,6 +868,10 @@ void sys_power_state_inform(void)
     MCUPCK res;
     uint status;
     uchar buffer[24];
+//    int pos, e_pos, s_pos;
+//    int ret, i;
+//    int data_vail_len = 0;
+//    int len;
     if(gSystem.lpwr.bm.low_to_normal == 1)
     {
         gSystem.lpwr.bm.low_to_normal = 0;
@@ -868,15 +887,42 @@ void sys_power_state_inform(void)
         res.sno1 = 0; 
         res.sno2 = 1; 
         ctc_send_frame(res, buffer);
-        sys_DelayMs(200);
+        sys_DelayMs(250);
         ctc_send_frame(res, buffer);
+        g_Heartbeat_Timer = sys_get_counter();      // 唤醒后需要重新计时，防止重复进入
+        
+//        for(i=0; i<5; i++) 
+//        {
+//            ctc_send_frame(res, buffer);
+//            sys_DelayMs(250);
+//            // waiting for the respond
+//            if (ctc_uart_dma_check()) {
+//                pos = drv_dma_get_daddr(UART4_DMA_CHANNEL);
+//                data_vail_len =  pos -(uint32_t)(&gwp30SysBuf_c.work[0]);
+//                ret = ctc_frame_check(gwp30SysBuf_c.work, data_vail_len, &s_pos, &e_pos);
+//                if (ret == RET_OK) {
+//                    drv_dma_stop();
+//                    len = e_pos - s_pos + 1;
+//                    TRACE_BUF("rece", gwp30SysBuf_c.work, data_vail_len);
+//                    TRACE("\r\nexit the lowpower\r\n");
+//                    ret = ctc_recev_frame(0, gwp30SysBuf_c.work, len);
+//                    data_vail_len = 0;
+//                    memset(gwp30SysBuf_c.work, sizeof(gucBuff), 0);
+//                    ctc_uart_restart();
+//                    return ;
+//                }
+//            }
+//        }
+//        // not return, enter sleep again
+//        enter_lowerpower_freq();
+//        TRACE("\r\nenter the lowpower again\r\n");
     }
     if(gSystem.lpwr.bm.low_en == 1)
     {
         if(sys_get_counter() > Lowpower_Timer + LOWPOWER_DELAYED)
         {
             gSystem.lpwr.bm.low_en = 0; //进入休眠后，失能休眠
-            TRACE("\r\nsys enter_lowerpower_freq");       
+            TRACE("\r\nsys nter_lowerpower_freq");       
             status = SYS_STATE_LOWPOWER; 
             buffer[0] = (uint8_t)status & 0xFF;
             buffer[1] = (uint8_t)(status >> 8) & 0xFF;
@@ -891,10 +937,20 @@ void sys_power_state_inform(void)
 
             s_DelayMs(20);
 
+            TRACE("\r\n-|enter start");
             enter_lowerpower_freq();
+            TRACE("\r\n-|enter out");
         }
     }
-
+    // 验证心跳包数据
+    if ( gSystem.lpwr.bm.enable == 1 ) {
+        if(gSystem.lpwr.bm.low_flag == 0){// 未检测到心跳包，或串口相关数据
+            if(sys_get_counter() > g_Heartbeat_Timer + LOWPOWER_HEARTBEAT_TIMEOUT){
+                TRACE("\nnot heartbeat info and enter lowpower\n");
+                enter_lowerpower_freq();
+            }
+        }
+    }
 }
 
 /**

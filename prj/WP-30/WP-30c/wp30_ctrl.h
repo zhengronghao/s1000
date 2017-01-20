@@ -114,4 +114,8 @@
 #include "./manage/se_manage.h"
 #endif
 
+#if defined(CFG_RFID_IDCARD)
+#include "./idcard/idcard.h"
+#endif
+
 #endif

@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -59,6 +59,12 @@
  * asumed.
  */
 #define AS3911_RX_IRQ_SANITY_TIMEOUT        6000
+
+/*! Sanity timeout during AS3911 receive operation if rxs was already detected.
+ * After 10ms@106kbps we must have more than filled the FIFO and water level
+ * must have been signaled
+ */ 
+#define AS3911_RX_IRQ_SANITY_TIMEOUT_AFTER_RXS        50
 
 /*! Time offset between the start of a PICC response and the start of
  * receive interrupt (carrier cycles).
@@ -188,7 +194,7 @@ void as3911SetReceiverDeadtime(u32 receiverDeadtime)
     u8 mrt_value;
 
     as3911ReadRegister(AS3911_REG_MODE, &reg_mode);
-    if ((reg_mode & 0x78) == 0x00)
+    if ((reg_mode & AS3911_REG_MODE_mask_om) == AS3911_REG_MODE_om_nfc)
     {
         /* NFCIP1 mode. */
         mrt_value = (u8) ((receiverDeadtime >> 9) & 0xFF);
@@ -215,7 +221,10 @@ void as3911SetReceiveTimeout(u32 receiveTimeout)
         if ((((u16) receiveTimeout) & 0x0FFF) != 0)
             nrtValue += 1;
 
-        as3911ModifyRegister(AS3911_REG_GPT_CONF, 0x03, 0x03);
+//        as3911ModifyRegister(AS3911_REG_GPT_CONF, 0x03, 0x03);
+        as3911ModifyRegister(AS3911_REG_GPT_CONTROL,
+            AS3911_REG_GPT_CONTROL_nrt_emv | AS3911_REG_GPT_CONTROL_nrt_step,
+            AS3911_REG_GPT_CONTROL_nrt_emv | AS3911_REG_GPT_CONTROL_nrt_step);
     }
     else
     {
@@ -226,7 +235,10 @@ void as3911SetReceiveTimeout(u32 receiveTimeout)
         if ((((u16) receiveTimeout) & 0x03F) != 0)
             nrtValue += 1;
 
-        as3911ModifyRegister(AS3911_REG_GPT_CONF, 0x03, 0x02);
+//        as3911ModifyRegister(AS3911_REG_GPT_CONF, 0x03, 0x02);
+        as3911ModifyRegister(AS3911_REG_GPT_CONTROL,
+            AS3911_REG_GPT_CONTROL_nrt_emv | AS3911_REG_GPT_CONTROL_nrt_step,
+            AS3911_REG_GPT_CONTROL_nrt_emv);
     }
 
     as3911WriteRegister(AS3911_REG_NO_RESPONSE_TIMER1, (u8) (nrtValue >> 8));
@@ -239,7 +251,8 @@ void as3911SetFrameDelayTime(u32 frameDelayTime)
 
     as3911FrameDelayTime = frameDelayTime;
 
-    as3911ModifyRegister(AS3911_REG_GPT_CONF, 0xE0, 0x20);
+//    as3911ModifyRegister(AS3911_REG_GPT_CONF, 0xE0, 0x20);
+    as3911ModifyRegister(AS3911_REG_GPT_CONTROL, AS3911_REG_GPT_CONTROL_gptc_mask, AS3911_REG_GPT_CONTROL_gptc_no_trigger);
     
     gptValue = (u16) (as3911FrameDelayTime >> 3);
     as3911WriteRegister(AS3911_REG_GPT1, (u8) ((gptValue >> 8) & 0xFF));
@@ -260,26 +273,26 @@ void as3911Transmit(u8 *message, size_t messageLength, AS3911RequestFlags_t requ
 
     /* Clear FIFO. */
     as3911ExecuteCommand(AS3911_CMD_CLEAR_FIFO);
-	
-	/* Reset squelch gain reduction. */
-	as3911ExecuteCommand(AS3911_CMD_CLEAR_SQUELCH);
+
+    /* Reset squelch gain reduction. */
+    as3911ExecuteCommand(AS3911_CMD_CLEAR_SQUELCH);
 
     if (transmissionModeFlags == AS3911_TRANSMIT_WUPA)
     {
         /* Enable anticollision frame handling. */
-        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x01);
+        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, AS3911_REG_ISO14443A_NFC_antcl, AS3911_REG_ISO14443A_NFC_antcl);
         as3911ExecuteCommand(AS3911_CMD_TRANSMIT_WUPA);
     }
     else if (transmissionModeFlags == AS3911_TRANSMIT_REQA)
     {
         /* Enable anticollision frame handling. */
-        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x01);
+        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, AS3911_REG_ISO14443A_NFC_antcl, AS3911_REG_ISO14443A_NFC_antcl);
         as3911ExecuteCommand(AS3911_CMD_TRANSMIT_REQA);
     }
     else
     {
         /* Setup number of bytes to send. */
-		as3911WriteRegister(AS3911_REG_NUM_TX_BYTES1, (messageLength >> 5) & 0xFF);
+        as3911WriteRegister(AS3911_REG_NUM_TX_BYTES1, (messageLength >> 5) & 0xFF);
         as3911WriteRegister(AS3911_REG_NUM_TX_BYTES2, (messageLength << 3) & 0xFF);
 
         if (messageLength > AS3911_FIFO_SIZE)
@@ -351,7 +364,7 @@ void as3911Transmit(u8 *message, size_t messageLength, AS3911RequestFlags_t requ
     return;
 }
 
-uint gas3911emvtb145flg = 0;
+//uint gas3911emvtb145flg = 0;
 const uchar tb145atqb[] = {0x50,0x46,0xB5,0xC7,0xA0,0x00,0x00,0x00,0x00,0x00,0x21,0x81,0x90,0x43};
 s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength)
 {
@@ -373,15 +386,26 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
 
 //    uchar temp[16];
 
-    if ( responseLength ) {
-        *responseLength = 0;
+//    if (!response || !maxResponseLength || !responseLength)
+    if (!response || !responseLength)
+    {
+        return AS3911_NO_ERROR;
     }
+
+
+    *responseLength = 0;
+
     do
     {
 
+//        as3911WaitForInterruptTimed(
+//            AS3911_IRQ_MASK_RXS | AS3911_IRQ_MASK_RXE | AS3911_IRQ_MASK_WL | AS3911_IRQ_MASK_NRE,
+//            AS3911_RX_IRQ_SANITY_TIMEOUT,
+//            &irqStatus
+//            );
         as3911WaitForInterruptTimed(
             AS3911_IRQ_MASK_RXS | AS3911_IRQ_MASK_RXE | AS3911_IRQ_MASK_WL | AS3911_IRQ_MASK_NRE,
-            AS3911_RX_IRQ_SANITY_TIMEOUT,
+            (receiving ? AS3911_RX_IRQ_SANITY_TIMEOUT_AFTER_RXS : AS3911_RX_IRQ_SANITY_TIMEOUT),
             &irqStatus
             );
 
@@ -404,14 +428,14 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
              * at the end of receive interrupt.
              */
             as3911ContinuousRead(AS3911_REG_FIFO_RX_STATUS1, &fifoStatus[0], 2);
-            numBytesInFifoWL = fifoStatus[0] & 0x7F;
+            numBytesInFifoWL = fifoStatus[0] & AS3911_REG_FIFO_RX_STATUS1_mask_fifo_b;
             
             as3911ReadRegister(AS3911_REG_AUX_DISPLAY, &auxDisplay);
             D2(LABLE(0xF0);
                DATAIN((auxDisplay));
                DATAIN((numBytesInFifoWL));
                );
-            while ((auxDisplay & AS3911_AUX_DISPLAY_RXON_BIT) && (numBytesInFifoWL > 0))
+            while ((auxDisplay & AS3911_REG_AUX_DISPLAY_rx_on) && (numBytesInFifoWL > 0))
             {
                 fifoReadSize = 0;
 
@@ -431,7 +455,7 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
 //                D2(DATAIN((numBytesInFifoWL)););
             }
 
-            if (!(auxDisplay & AS3911_AUX_DISPLAY_RXON_BIT))
+            if (!(auxDisplay & AS3911_REG_AUX_DISPLAY_rx_on))
                 irqStatus |= AS3911_IRQ_MASK_RXE;
             D2(DATAIN((auxDisplay));
                DATAIN((numBytesReceived>>8));
@@ -465,14 +489,14 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
             reenableReceiver = OFF;
 
             as3911ContinuousRead(AS3911_REG_FIFO_RX_STATUS1, &fifoStatus[0], 2);
-            numBytesInFifo = fifoStatus[0] & 0x7F;
+            numBytesInFifo = fifoStatus[0] & AS3911_REG_FIFO_RX_STATUS1_mask_fifo_b;
 
             as3911GetInterrupts(
                 AS3911_IRQ_MASK_COL | AS3911_IRQ_MASK_CRC | AS3911_IRQ_MASK_PAR | AS3911_IRQ_MASK_ERR1 | AS3911_IRQ_MASK_ERR2,
                 &errorIrqStatus
                 );
 
-            if (fifoStatus[1] & 0x20)
+            if (fifoStatus[1] & AS3911_REG_FIFO_RX_STATUS2_fifo_ovr)
                 overflowOccured = ON;
 
             D2(LABLE(0xF3);
@@ -483,7 +507,7 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
                DATAIN((errorIrqStatus>>8));
                DATAIN((errorIrqStatus>>16)););
             /* Residual bits are handled as hard framing error. */
-            if ((fifoStatus[1] & 0x11) != 0x00)
+            if ((fifoStatus[1] & (AS3911_REG_FIFO_RX_STATUS2_fifo_ncp | AS3911_REG_FIFO_RX_STATUS2_np_lb)) != 0x00)
                 errorIrqStatus |= AS3911_IRQ_MASK_ERR2;
 
             D2(LABLE(0x88);
@@ -499,7 +523,26 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
             }
 
             if(as3911EmvExceptionProcessing)
-            {
+            { 
+#if 11
+                /* EMV 2.4 Requirement 4.29: PCD EMD Handling:
+                 * If a transmission error is detected and the number of received
+                 * bytes is less than 4, then the PCD shall ignore the transmission and
+                 * be ready to receive a PICC frame within a time tRECOVERY after the
+                 * end of the modulation of the received bytes with the transmission
+                 * error. */
+                if((numBytesReceived + numBytesInFifo) <= as3911TransmissionErrorThreshold)
+                {
+                    if (((errorIrqStatus & AS3911_IRQ_MASK_COL)
+                      || (errorIrqStatus & AS3911_IRQ_MASK_ERR1)
+                      || (errorIrqStatus & AS3911_IRQ_MASK_ERR2)
+                      || (errorIrqStatus & AS3911_IRQ_MASK_PAR)
+                      || (errorIrqStatus & AS3911_IRQ_MASK_CRC)))
+                        reenableReceiver = TRUE;
+                }
+                if (!receiving) /* no RXS but RXE case (for 3-bit messages) */
+                    reenableReceiver = ON;
+#else
                 if (  (errorIrqStatus & AS3911_IRQ_MASK_COL)
                    || (errorIrqStatus & AS3911_IRQ_MASK_ERR1)
                    || (errorIrqStatus & AS3911_IRQ_MASK_ERR2))
@@ -518,6 +561,7 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
                    && ((numBytesReceived + numBytesInFifo) < as3911TransmissionErrorThreshold)
                    && ((numBytesReceived + numBytesInFifo) >= 2))
                     reenableReceiver = ON;
+#endif
             }
 
             D2(DATAIN(reenableReceiver));
@@ -535,9 +579,12 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
                  */
                 if (!nrtExpired)
                 {
+//                    receiving = OFF;
+//                    as3911ExecuteCommand(AS3911_CMD_CLEAR_FIFO);
+//                    as3911ExecuteCommand(AS3911_CMD_UNMASK_RECEIVE_DATA);
+                    u8 receiverEnableDirectCommands[] = { AS3911_CMD_CLEAR_FIFO, AS3911_CMD_UNMASK_RECEIVE_DATA };
                     receiving = OFF;
-                    as3911ExecuteCommand(AS3911_CMD_CLEAR_FIFO);
-                    as3911ExecuteCommand(AS3911_CMD_UNMASK_RECEIVE_DATA);
+                    as3911ExecuteCommands(receiverEnableDirectCommands, sizeof(receiverEnableDirectCommands));
                 }
                 else
                 {
@@ -587,6 +634,13 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
                 /* Start GPT timer used for FDT_PCD. */
                 // as3911ExecuteCommand(AS3911_CMD_START_TIMER);
 
+                /* Stop NRT timer. */
+                as3911ModifyRegister(AS3911_REG_GPT_CONTROL, AS3911_REG_GPT_CONTROL_nrt_emv, 0x00);
+                as3911ExecuteCommand(AS3911_CMD_CLEAR_FIFO);
+
+                /* Start GPT timer used for FDT_PCD. */
+                as3911ExecuteCommand(AS3911_CMD_START_GP_TIMER);
+
 //                as3911_SetTimerCount(500);//general purpose timer not work  09012013 chenf
 //                as3911_StartTimer(AS3911_TIMER);
 
@@ -603,18 +657,18 @@ s16 as3911Receive(u8 *response, size_t maxResponseLength, size_t *responseLength
                     return AS3911_PARITY_ERROR;
                 else if (errorIrqStatus & AS3911_IRQ_MASK_ERR2)
                 {
-                    if ( gas3911emvtb145flg == 1 ) {
-                        //TB145 特殊处理
-                        if ( memcmp(response, tb145atqb, 14) == 0 ) {
-                            return AS3911_NO_ERROR;
-                        }else{
-                            return AS3911_SOFT_FRAMING_ERROR;
-                        }
-                    }else{
+//                    if ( gas3911emvtb145flg == 1 ) {
+//                        //TB145 特殊处理
+//                        if ( memcmp(response, tb145atqb, 14) == 0 ) {
+//                            return AS3911_NO_ERROR;
+//                        }else{
+//                            return AS3911_SOFT_FRAMING_ERROR;
+//                        }
+//                    }else{
                         EG_mifs_tWorkInfo.lBitsReceived = numBytesReceived*8;
                         EG_mifs_tWorkInfo.lBitsReceived += ((fifoStatus[1]>>1)&0x07);
                         return AS3911_SOFT_FRAMING_ERROR;
-                    }
+//                    }
                 }
                 else if (overflowOccured)
                     return AS3911_OVERFLOW_ERROR;
@@ -660,25 +714,25 @@ s16 as3911Transceive(u8 *request, size_t requestLength
        );
     if (requestFlags & AS3911_IGNORE_CRC)
     {
-        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x01);
-        as3911ModifyRegister(AS3911_REG_AUX, 0xC0, 0x80);
+        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, AS3911_REG_ISO14443A_NFC_antcl, AS3911_REG_ISO14443A_NFC_antcl);
+        as3911ModifyRegister(AS3911_REG_AUX, AS3911_REG_AUX_no_crc_rx | AS3911_REG_AUX_crc_2_fifo, AS3911_REG_AUX_no_crc_rx);
     }
     else if (requestFlags & AS3911_CRC_TO_FIFO)
     {
-        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x00);
-        as3911ModifyRegister(AS3911_REG_AUX, 0xC0, 0x40);
+        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, AS3911_REG_ISO14443A_NFC_antcl, 0x00);
+        as3911ModifyRegister(AS3911_REG_AUX, AS3911_REG_AUX_no_crc_rx | AS3911_REG_AUX_crc_2_fifo, AS3911_REG_AUX_crc_2_fifo);
     }
     else
     {
-        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x00);
-        as3911ModifyRegister(AS3911_REG_AUX, 0xC0, 0x00);
+        as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, AS3911_REG_ISO14443A_NFC_antcl, 0x00);
+        as3911ModifyRegister(AS3911_REG_AUX, AS3911_REG_AUX_no_crc_rx | AS3911_REG_AUX_crc_2_fifo, 0x00);
     }
 
     /* Adjust modulation level. */
     as3911AdjustModulationLevel();
 	
 	/* Adjust gain. */
-	as3911AdjustGain();
+//	as3911AdjustGain();
 
     /* Wait for the frame delay time to pass. */
     while (as3911FdtIsRunning())
@@ -733,10 +787,10 @@ s16 as3911Transceive(u8 *request, size_t requestLength
 
 static uchar as3911FdtIsRunning()
 {
-    u8 aux = 0;
-    as3911ReadRegister(AS3911_REG_VSS_REGULATOR_RESULT, &aux);
+    u8 regulatorResult = 0;
+    as3911ReadRegister(AS3911_REG_REGULATOR_RESULT, &regulatorResult);
 
-    if (aux & 0x04)
+    if (regulatorResult & AS3911_REG_REGULATOR_RESULT_gpt_on)
         return ON;
     else
         return OFF;

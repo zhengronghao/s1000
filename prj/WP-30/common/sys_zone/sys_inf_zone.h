@@ -146,7 +146,10 @@ enum {
 // 射频相关  4*5=20B
 typedef struct __MODULE_RFID_INFO {
     uchar type;                  // FF-不支持 0- 1-3911 2-FM17550 3-PN512
-    uchar rfu[3];
+//    uchar rfu[3];
+    uchar gTypeBmodule;  //type b调制深度
+    uchar gTypeArec;     //type a接收灵敏度
+    uchar gTypeBrec;     //type b接收灵敏度
     uint rfid_powerfield_time;   // 场强建立延时时间 (4B)
     uint field_strength;         // 场强大小
     uint  irfu[2];

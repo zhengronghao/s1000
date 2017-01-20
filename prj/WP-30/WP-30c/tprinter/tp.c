@@ -40,10 +40,11 @@ typedef struct
     volatile uint16_t tail;
     uint16_t feedmax;
     uint8_t heat_max_cnt;
-    uint32_t heat_max;    //一次打印最大加热时间
+    uint32_t dotline_min_time;    // 打印一个点行消耗的最小时间
     uint8_t heat_cnt;
     uint8_t last_cnt;
-    uint8_t heat_buf[((LineDot/TP_MAX_HEAT_STROBE)+(TP_MAX_HEAT_DOT-7)-1)/(TP_MAX_HEAT_DOT-7)][LineDot/8];
+    uint8_t heat_buf[((LineDot/TP_MAX_HEAT_STROBE)+(TP_MAX_HEAT_DOT_64-7)-1)/(TP_MAX_HEAT_DOT_64-7)][LineDot/8];
+    uint8_t heat_dot_max;
     uint32_t heat_adj;
 } TP_T;
 
@@ -706,14 +707,11 @@ static void tp_adjust_steptime(uint8_t heat_cnt,uint16_t max_heat_dots)
     
     heat *= heat_cnt;
     heat += TpMinWaitTime;
-
-
-    if(heat < tp.heat_max)
+    //速度限制
+    if(heat < tp.dotline_min_time)
     {
-        heat = tp.heat_max;
+        heat = tp.dotline_min_time;
     }
-
-
 
     while(1) {
         time_sum = 0;
@@ -815,17 +813,32 @@ static uint16_t tp_max_heat_Dots_adj(uint16_t dots)
 {
     uint16_t max_heat_dot;
 
-    max_heat_dot = dots/(dots/(TP_MAX_HEAT_DOT+1)+1);
+    max_heat_dot = dots/(dots/(tp.heat_dot_max+1)+1);
 
-    if ((max_heat_dot+1) <= TP_MAX_HEAT_DOT) {
+    if ((max_heat_dot+1) <= tp.heat_dot_max) {
         max_heat_dot += 1;
     } else {
-        max_heat_dot = TP_MAX_HEAT_DOT;
+        max_heat_dot = tp.heat_dot_max;
     }
 
     return max_heat_dot;
 }
 
+//static uint16_t tp_max_heat_Dots_adj(uint16_t dots)
+//{
+//    uint16_t max_heat_dot;
+//
+//    max_heat_dot = dots/(dots/(TP_MAX_HEAT_DOT+1)+1);
+//
+//    if ((max_heat_dot+1) <= TP_MAX_HEAT_DOT) {
+//        max_heat_dot += 1;
+//    } else {
+//        max_heat_dot = TP_MAX_HEAT_DOT;
+//    }
+//
+//    return max_heat_dot;
+//}
+//
 static void tp_data_cnt_proc(uint8_t strobe_cnt)
 {
     static uint8_t const Byte2DotNumTbl[] =
@@ -862,13 +875,18 @@ static void tp_data_cnt_proc(uint8_t strobe_cnt)
         max_heat_dots += dot;
     }
     
+//    TRACE("\r\n%d",max_heat_dots);
+
     max_heat_dots = tp_max_heat_Dots_adj(max_heat_dots);
+
+//    TRACE("\r\nheat_dots:%d,heat_dot_max:%d",max_heat_dots,tp.heat_dot_max);
+
     memset(tp.heat_buf[0], 0, sizeof(tp.heat_buf[0]));
 
     for (i=0, pt=((LineDot/8/TP_MAX_HEAT_STROBE)*strobe_cnt), heat_cnt=0, max_dot = 0; i < LineDot/8/TP_MAX_HEAT_STROBE; i++, pt++)
     {
         c = TP_dot[tp.tail][pt];
-        dot = Byte2DotNumTbl[c];
+        dot = Byte2DotNumTbl[c];        //一个字节中黑点数
         if((max_dot+dot)<=max_heat_dots)
         {
             max_dot += dot;
@@ -1199,6 +1217,7 @@ void tp_init(void)
     MOTOR_PHASE_2A_LOW();
     MOTOR_PHASE_2B_LOW();
     tp_set_desity(3);
+    tp.heat_dot_max = TP_MAX_HEAT_DOT; 
     tp.head = tp.tail = 0;
     tp.state = TPSTATE_IDLE;
 }
@@ -1256,22 +1275,27 @@ static uint8_t tp_start(void)
     //开始新的一轮打印
     tp_states.paper_out_count = 0;
     tp_states.count =0;
-    //电压检测 
-    for (i = 0; i < 10; i++) {
-        PRN_POWER_CHARGE();
-        s_DelayUs(600);
+    //电压检测,--------修改电压检测口线PWM延时值---16年11月9日 
+    for (i = 0; i < 75; i++) {
         PRN_POWER_DISCHARGE();
-        s_DelayUs(600);
+        s_DelayUs(100);
+        PRN_POWER_CHARGE();
+        s_DelayUs(100);
     }
-    PRN_POWER_CHARGE();
     tp_states.voltage = tp_power_value();
-    if(tp_states.voltage < POWRER_LOW_ALARM)
+    if(tp_states.voltage > POWRER_LOW_ALARM_LV2){
+        //TRACE("\r\ntp dot 96 voltaeg:%d",tp_states.voltage);
+        tp.heat_dot_max = TP_MAX_HEAT_DOT; 
+    }else if(tp_states.voltage > POWRER_LOW_ALARM_LV1){
+        //TRACE("\r\ntp dot 64 voltaeg:%d",tp_states.voltage);
+        tp.heat_dot_max = TP_MAX_HEAT_DOT_64; 
+    } else if(tp_states.voltage < POWRER_LOW_ALARM_LV1)
     {
-       tp.head = 0;
-       tp.tail = 0;
-
-       return TP_POWER_OUT_MASK;//电压过低
+        tp.head = 0;
+        tp.tail = 0;
+        return TP_POWER_OUT_MASK;//电压过低
     }
+    
     //温度检测
     tp_states.temperature = tp_temp_value();
     if(tp_states.temperature > TEMP_HIGH_ALARM - 5)
@@ -1282,15 +1306,16 @@ static uint8_t tp_start(void)
         return TP_TEMP_MASK;
     } 
     tp.state = TPSTATE_START;
+  
     tp.accel = 0;
-   
-    tp.heat_max = 0;
+//打印速度限制,速度不能过快 
+    tp.dotline_min_time = 0;
     tp_battery_voltage_adj(410);
-    tp.heat_max = tp.heat_adj;
-    tp.heat_max = tp_heat_pre_line_adj(tp.heat_max);
-    tp.heat_max = tp_heat_dots_adj(tp.heat_max, TP_MAX_HEAT_DOT);
-    tp.heat_max *= LineDot/TP_MAX_HEAT_DOT/3;
-    tp.heat_max += TpMinWaitTime;
+    tp.dotline_min_time = tp.heat_adj;
+    tp.dotline_min_time = tp_heat_pre_line_adj(tp.dotline_min_time);
+    tp.dotline_min_time = tp_heat_dots_adj(tp.dotline_min_time, TP_MAX_HEAT_DOT);
+    tp.dotline_min_time *= LineDot/TP_MAX_HEAT_DOT/3;
+    tp.dotline_min_time += TpMinWaitTime;
 
     
     tp_timer_start(TPRINT_TIMER_ID, TpAccelerationSteps[0], tp_printer_handler);
@@ -1304,34 +1329,13 @@ static uint8_t tp_printcmd_to_buf(uint8_t cmd, uint8_t *dot, uint8_t len)
     uint32_t head;
 
 /***************************************************/
-    uint8_t i;
+    //温度检测 
     tp_states.temperature = tp_temp_value();
     if((tp_states.temperature > TEMP_HIGH_ALARM) && (tp_states.ignore.temperature == FALSE))
     {
         return TP_TEMP_MASK;
     }
-    
-        tp_states.count++;
-    if(tp_states.count == VOLTAGE_DETECTION_COUNT)      //每打印 XX 个点行采集一次温度和电压
-    {
-        tp_states.count =0;
-        
-        //test 
-        //打印过程中电压过低 降低打印速度
-        for (i = 0; i < 10; i++) {
-        PRN_POWER_CHARGE();
-        s_DelayUs(600);
-        PRN_POWER_DISCHARGE();
-        s_DelayUs(600);
-        }
-        PRN_POWER_CHARGE();
-        tp_states.voltage = tp_power_value();
-        if(tp_states.voltage < POWRER_LOW_ALARM && tp_states.ignore.power == FALSE)
-        {
-            tp.accel = 0;
-        }
-    }
-    
+    //缺纸检测 
     //TRACE("\r\npaper:%d",tp_states.paper);
     if(tp_states.ignore.paper_out == FALSE) {
         tp_states.paper = tp_printer_ready();
@@ -1819,24 +1823,6 @@ void TPSelfTest_6(void)
     }
     PRN_POWER_CHARGE();
     TRACE("\r\n电压:%d",tp_power_value());
-
-  
-//  uint8_t buf[LineDot/8];
-//   
-//    tp_set_desity(7);
-//    while(1)
-//    {
-//        ret = console_read_buffer(buf,48,5000);
-//        if(ret == 48)
-//        {
-//            tp_print_line(buf);
-//            memset(buf,0,sizeof(buf));
-//        }
-//        else
-//        {
-//            break;
-//        }
-//    }
 }
 #endif
 

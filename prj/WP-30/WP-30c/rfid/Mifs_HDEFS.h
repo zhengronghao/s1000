@@ -26,11 +26,6 @@
                          寄存器地址定义
                           
 ***********************************************************************/
-//    #define  EM_RC531_Module  //RC531模块
-    #define  EM_PN512_Module
-//    #define  EM_RC663_Module  //RC531模块
-    #define  EM_AS3911_Module  //AS3911模块
-
 #ifdef EM_AS3911_Module
 #include "./rfid/as3911/as3911.h"
 #endif

@@ -395,6 +395,7 @@ void s_Rfid_SetInt(uint mode)
 {
 	if(mode == ON)
 	{
+#if AS3911_IRQMODE
         if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
             //3911修改为高电平中断(上升沿中断可用有可能不可靠)
 //            requst_pio_interrupt(RFID_INTERRUPT, INT_HIGH, 3, EI_vMifsHisr);
@@ -405,6 +406,7 @@ void s_Rfid_SetInt(uint mode)
             enable_irq(RFID_IO_IRQn);
         }
 //		enable_pio_interrupt(RFID_INTERRUPT);
+#endif
 	}
 	else
 	{
@@ -482,6 +484,7 @@ void s_Rfid_vHalInit(void)
 {
     GPIO_InitTypeDef gpio_init;
 
+    #if AS3911_IRQMODE
     gpio_init.GPIOx = RFID_IO_GPIO;//gcKbOpt[index].gpiox;
 //    gpio_init.PORT_Mode = PORT_Mode_MUX_gpio|PORT_Mode_IN_PU 
 //        |PORT_Mode_IN_PFE|PORT_Mode_IRQ_EXTI_FEdge;
@@ -495,13 +498,22 @@ void s_Rfid_vHalInit(void)
     gpio_init.PORT_Pin = RFID_IO_PINx;
     gpio_init.GPIO_Pinx_Mode = GPIO_INPUT(gpio_init.PORT_Pin);
     hw_gpio_init(&gpio_init);
+    #else
+    gpio_init.GPIOx = RFID_IO_GPIO;//gcKbOpt[index].gpiox;
+    gpio_init.PORT_Mode = PORT_Mode_MUX_gpio|GPIO_INPUT_PULLUP|GPIO_INPUT_FILTERENABLE;
+    gpio_init.PORT_Pin = RFID_IO_PINx;
+    gpio_init.GPIO_Pinx_Mode = GPIO_INPUT(gpio_init.PORT_Pin);
+    hw_gpio_init(&gpio_init);
+    #endif
 
+#ifdef EM_PN512_Module
     //17550复位
     gpio_init.GPIOx = RFID_RST_GPIO;
     gpio_init.PORT_Mode = PORT_Mode_MUX_gpio|PORT_Mode_Out_DSH;
     gpio_init.PORT_Pin = RFID_RST_PINx;
     gpio_init.GPIO_Pinx_Mode = GPIO_OUTPUT(RFID_RST_PINx);
     hw_gpio_init(&gpio_init);
+#endif
 
 //    gpio_init.GPIOx = GPIOE;
 //    gpio_init.PORT_Mode = PORT_Mode_MUX_gpio|PORT_Mode_Out_DSH;

@@ -53,7 +53,9 @@
 
 /*!
  *****************************************************************************
- * \brief Frame wait time for n = 9 frames of the ISO14443A protocol.
+ * \brief Frame wait time for n = 9 frames of the ISO14443A-3 protocol.
+ * see Table 4.2 and 4.3 in EMVco Book D.
+ * Frame delay time PCD to PICC
  * 
  * The frame wait time depends on the last
  * transmitted bit, therefore the higher value (last transmitted
@@ -71,6 +73,11 @@
 #define EMV_ATQA_UID_SIZE_DOUBLE    0x40
 /*! ATQA UID size field value for a triple size UID. */
 #define EMV_ATQA_UID_SIZE_TRIPLE    0x80
+
+/*! Bit mask for the RFU bit field of the second ATQA byte. */
+#define EMV_ATQA_2_RFU_BIT_MASK     0xF0
+/* ATQA second byte RFU bit field */
+#define EMV_ATQA_2_RFU_BIT          0x00
 /*!
  *****************************************************************************
  * Invalid ATQA UID size field value. A standard conforming card
@@ -91,7 +98,7 @@
 /*! NVB (number of valid bits) byte value for an ISO14443-A select request. */
 #define EMV_SELECT_NVB          0x70
 
-/*! ISO14434-A anticollision response cascade tag value. */
+/*! ISO14443-A anticollision response cascade tag value. */
 #define EMV_CASCADE_TAG         0x88
 /*! Mask for the cascade bit of an ISO14443-A SAK. */
 #define EMV_SAK_CASCADE_BIT_MASK                0x04
@@ -138,15 +145,17 @@
  * EMV_SEL_CL2: anticollision/select cascade level 2 \n
  * EMV_SEL_CL3: anticollision/select cascade level 3 \n
  * 
- * \param[in] cascaded
- *   TRUE: This is a cascaded anticollision/select sequence. \n
- *   FALSE: This is a non cascaded anticollision/select sequence.
  * \param[in] uid Buffer to store the received uid part. For a cascaded request
  *  this buffer must be able to store 3 bytes. For a non cascaded request this
  *  buffer must be able to store 4 bytes.
+ * \param[in] activationComplete buffer to see if the activation is complete
+ *  TRUE: activation is complete and valid. \n
+ *  FALSE: activation is not complete, next cascade level needs to be 
+ *  triggered
  *****************************************************************************
  */
-static s16 emvAnticollisionLevelx(u8 sel, bool_t cascaded, u8 *uid);
+//static s16 emvAnticollisionLevelx(u8 sel, bool_t cascaded, u8 *uid);
+static s16 emvAnticollisionLevelx(u8 sel, u8 *uid, bool_t *activationComplete);
 
 /*
 ******************************************************************************
@@ -188,7 +197,8 @@ s16 emvTypeAAnticollision(EmvPicc_t *picc)
     s8 error = EMV_ERR_OK;
     u8 atqa[2];
     size_t responseLength = 0;
-
+    bool_t activationComplete = FALSE;
+    
     /* Set ISO14443-A mode. */
     emvHalSetStandard(EMV_HAL_TYPE_A);
     emvHalSetErrorHandling(EMV_HAL_PREACTIVATION_ERROR_HANDLING);
@@ -206,6 +216,50 @@ s16 emvTypeAAnticollision(EmvPicc_t *picc)
     else if (responseLength != 2)
         return EMV_ERR_COLLISION;
 
+#if 11
+    /* Check correctness of ATQA RFU bits. */
+   
+    /* Requirements 5.3 PCD Handling of ATQA 
+     * The PCD shall not examine or depend upon the values
+     * returned by the PICC in b8 to b7 and b5 to b1 of byte 1 and in
+     *  b4 to b1 of byte 2 of the ATQA.*/ 
+    if ((atqa[1] & EMV_ATQA_2_RFU_BIT_MASK) != EMV_ATQA_2_RFU_BIT)
+    {
+        return EMV_ERR_PROTOCOL;
+    }
+     
+    /* Install PICC activation and remove handlers.
+     */
+    picc->activate = emvTypeAActivation;
+    picc->remove = emvTypeARemove;
+
+    error = emvAnticollisionLevelx(EMV_SEL_CL1, &picc->uid[0], &activationComplete);
+    if (error != EMV_ERR_OK)
+        return error;
+    picc->uidLength = 4;
+    
+    if (activationComplete == FALSE)
+    {
+        error = emvAnticollisionLevelx(EMV_SEL_CL2, &picc->uid[3], &activationComplete);
+        if (error != EMV_ERR_OK)
+            return error;
+        picc->uidLength = 7;
+    }
+    if (activationComplete == FALSE)
+    {
+        error = emvAnticollisionLevelx(EMV_SEL_CL3, &picc->uid[6], &activationComplete);
+        if (error != EMV_ERR_OK)
+            return error;
+        picc->uidLength = 10;
+    }
+    if (activationComplete == FALSE)
+    {     
+        /* This branch should never be reached */
+        return EMV_ERR_INTERNAL;       
+    }
+    
+    return EMV_ERR_OK;
+#else
     /* Check correctness of ATQA. */
     /* Check correctness of UID size encoding. */
     if ((atqa[0] & EMV_ATQA_UID_SIZE_MASK) == EMV_ATQA_UID_SIZE_INVALID)
@@ -272,6 +326,7 @@ s16 emvTypeAAnticollision(EmvPicc_t *picc)
          */
         return EMV_ERR_INTERNAL;
     }
+#endif
 }
 
 s16 emvTypeAActivation(EmvPicc_t *picc)
@@ -349,10 +404,10 @@ s16 emvTypeAActivation(EmvPicc_t *picc)
         picc->fwi = *tx_byte >> 4;
 
         if(picc->sfgi > EMV_SFGI_MAX_PCD)
-            return EMV_ERR_PROTOCOL;
+            picc->sfgi = EMV_SFGI_DEFAULT;
 
         if(picc->fwi > EMV_FWI_MAX_PCD)
-            return EMV_ERR_PROTOCOL;
+            picc->fwi = EMV_FWI_DEFAULT;
 
         tx_byte++;
     }
@@ -381,12 +436,17 @@ s16 emvTypeARemove(EmvPicc_t *picc)
     numWupaWithoutResponse = 0;
     while (numWupaWithoutResponse < 3)
     {
+        if(kb_hit())//cf20140423
+        {
+            return EMV_ERR_STOPPED;
+        }    
         if ( IfInkey(0)) {
-            Dprintk("--type a remove 99 to exit");
-            if ( InkeyCount(0) == 99 ) {
-                /* Received stop request, stop terminal main loop. */
-                return EMV_ERR_STOPPED;
-            }
+//            Dprintk("--type a remove 99 to exit");
+            return EMV_ERR_STOPPED;
+//            if ( InkeyCount(0) == 99 ) {
+//                /* Received stop request, stop terminal main loop. */
+//                return EMV_ERR_STOPPED;
+//            }
         }
 
         if (emvStopRequestReceived())
@@ -405,6 +465,7 @@ s16 emvTypeARemove(EmvPicc_t *picc)
             numWupaWithoutResponse++;
     }
 
+    emvHalResetField(); //延时在poll中已做6ms延时
     return EMV_ERR_OK;
 }
 
@@ -414,6 +475,81 @@ s16 emvTypeARemove(EmvPicc_t *picc)
 ******************************************************************************
 */
 
+#if 11
+static s16 emvAnticollisionLevelx(u8 sel, u8 *uid, bool_t *activationComplete)
+{
+    s16 error = EMV_ERR_OK;
+    u8 index = 0;
+    u8 command[7];
+    u8 response[5];
+    u8 bcc = 0;
+    size_t responseLength = 0;
+
+    /* Send CLx anticollision command. */
+    command[0] = sel;
+    command[1] = EMV_ANTICOLLISION_NVB;
+
+    error = emvPrelayer4Transceive(command, 2, response, sizeof(response),
+                &responseLength, EMV_TYPEA_FDT_9, EMV_HAL_TRANSCEIVE_WITHOUT_CRC);
+
+    /* Any transmission error shall be considered a collision. */
+    if (EMV_ERR_STOPPED == error)
+        return EMV_ERR_STOPPED;
+    else if ((EMV_ERR_OK != error) || (responseLength != 5))
+        return EMV_ERR_COLLISION;
+
+    /* Verify the BCC.
+     */
+    bcc = 0;
+    for (index = 0; index < 4; index++)
+        bcc ^= response[index];
+    if (response[4] != bcc)
+        return EMV_ERR_TRANSMISSION;
+
+    if (EMV_CASCADE_TAG == response[0])
+    {
+        for (index = 0; index < 3; index++)
+            uid[index] = response[1+index];
+    }
+    else
+    {
+        for (index = 0; index < 4; index++)
+            uid[index] = response[index];
+    }
+
+    /* Send CLx select command. */
+    command[0] = sel;
+    command[1] = EMV_SELECT_NVB;
+
+    for (index = 0; index < 5; index++)
+        command[2 + index] = response[index];
+
+    error = emvPrelayer4Transceive(command, 7, response, sizeof(response), &responseLength,
+                EMV_TYPEA_FDT_9, EMV_HAL_TRANSCEIVE_WITH_CRC);
+
+    /* SAK responses of invalid length should be treated as protocol error.
+     * (see EMV PCD Digital Test Bench & Test Cases v2.0.1a test cases
+     * TA305.11 and TA305.12.
+     */
+    if (EMV_ERR_STOPPED == error)
+        return EMV_ERR_STOPPED;
+    else if (EMV_ERR_OK != error)
+        return error;
+    else if (responseLength != (1 + 2))
+        return EMV_ERR_PROTOCOL;
+    
+    if ((responseLength == 3) && !(response[0] & EMV_SAK_CASCADE_BIT_MASK))
+    {
+        /* The SAK of a non cascaded request must have the ISO14443-4 compliant bit set. */
+        if (!(response[0] & EMV_SAK_ISO144434_COMPLIANT_BIT_MASK))
+        {
+            return EMV_ERR_PROTOCOL;
+        }
+        *activationComplete = TRUE;
+    }
+    return EMV_ERR_OK;
+}
+#else
 static s16 emvAnticollisionLevelx(u8 sel, bool_t cascaded, u8 *uid)
 {
     s16 error = EMV_ERR_OK;
@@ -498,12 +634,13 @@ static s16 emvAnticollisionLevelx(u8 sel, bool_t cascaded, u8 *uid)
 
         /* The SAK of a non cascaded request must have the ISO14443-4 compliant bit set. */
         //mifare 卡 此bit有可能为0
-//        if (!(response[0] & EMV_SAK_ISO144434_COMPLIANT_BIT_MASK))
-//            return EMV_ERR_PROTOCOL;
+        if (!(response[0] & EMV_SAK_ISO144434_COMPLIANT_BIT_MASK))
+            return EMV_ERR_PROTOCOL;
     }
 
     return EMV_ERR_OK;
 }
+#endif
 
 #endif
 #endif

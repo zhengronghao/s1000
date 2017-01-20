@@ -131,6 +131,8 @@
 #define SCAN_COMPORT    UART1
 #define SCAN_BAUD       9600 
 
+#define IDCARD_COMPART UART0
+#define IDCARD_BAUD   115200
 
 /*-------------------------------led----------------------------------*/
 #define LED_BLUE_GPIO       GPIOC 
@@ -154,10 +156,12 @@
 #define S_LED_GREEN   (1<<1)
 #define S_LED_RED     (1<<0)
 #define LED_ALL     0x0F
+
+#define CURRECYDETECT_PTx     PTD8
 /*----------------------------keyboard----------------------------------*/
 //keyboard col
-#define KB_GPIO_COL    GPIOC 
-#define KB_PORT_COL    PORTC_BASE_PTR 
+#define KB_GPIO_COL     GPIOC 
+#define KB_PORT_COL     PORTC_BASE_PTR 
 #define KB_GPIO_COL0    GPIOC 
 #define KB_PORT_COL0    PORTC_BASE_PTR 
 #define KB_PINx_COL0    PORT_Pin_7 //not used
@@ -620,7 +624,7 @@
 #define DL_CFG_VENDOR           "START"
 #define DL_CFG_MODULE           "S1000"
 #define S1000_BOOT_VER          "V1.0.1.1"
-#define S1000_CTRL_VER          "V1.0.1.5"
+#define S1000_CTRL_VER          "V1.0.1.7"
 #define MK210_APP_VER           "3.0.1.0"
 /*-----------------------------------------------------------------------------}
  *  °æ±¾ÐÅÏ¢

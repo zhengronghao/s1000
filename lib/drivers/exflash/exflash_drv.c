@@ -45,10 +45,10 @@ unsigned int exflash_write(unsigned int addr,unsigned int data_len,unsigned char
     //计算开始地址偏移
     sectors_start_offset = addr % sectors_size;
     temp = data_len - sectors_size + sectors_start_offset;  
-    TRACE("\r\ntemp:%d",temp); 
+  //  TRACE("\r\ntemp:%d",temp); 
     if(temp > 0)//一个扇区存不下
     {
-        TRACE("\r\n111");
+ //       TRACE("\r\n111");
         sectors_data_len =  sectors_size-sectors_start_offset;
         sectors_count = (data_len - sectors_data_len)/ sectors_size ;
         sectors_end_offset = (data_len - sectors_data_len)% sectors_size;
@@ -62,18 +62,18 @@ unsigned int exflash_write(unsigned int addr,unsigned int data_len,unsigned char
     }
     else
     {
-        TRACE("\r\n222");
+//        TRACE("\r\n222");
         sectors_data_len =  data_len;
         sectors_end_no = sectors_start_no;
         sectors_count = 0;
         sectors_end_offset = 0;
     }
     
-    TRACE("\r\nsectors_data_len:%d",sectors_data_len); 
-    TRACE("\r\nstart no:%d  end_no:%d",sectors_start_no,sectors_end_no);
-    TRACE("\r\nstart offset:%d  end offset:%d",sectors_start_offset,sectors_end_offset);
-    TRACE("\r\nsectors count:%d",sectors_count);
-
+//    TRACE("\r\nsectors_data_len:%d",sectors_data_len); 
+//    TRACE("\r\nstart no:%d  end_no:%d",sectors_start_no,sectors_end_no);
+//    TRACE("\r\nstart offset:%d  end offset:%d",sectors_start_offset,sectors_end_offset);
+//    TRACE("\r\nsectors count:%d",sectors_count);
+//
     //写开始扇区  
    // if(sectors_start_offset != 0)
     {
@@ -100,7 +100,7 @@ unsigned int exflash_write(unsigned int addr,unsigned int data_len,unsigned char
         {
             TRACE("\r\nexflash:计算错误");
         }
-        TRACE("\r\nbuf offset%d",data_offset-data);
+   //     TRACE("\r\nbuf offset%d",data_offset-data);
         hw_w25x_flash_read(sectors_buf,sectors_start_no*sectors_size,sectors_size);//读出一个扇区的数据 
         memcpy(sectors_buf,data_offset,sectors_end_offset);
         hw_w25_flash_erase_sector(sectors_start_no*sectors_size); 

@@ -137,6 +137,12 @@
 	#define RFID_MAX_PWR	  RFID_PWR_LEVEL3   //最大等级
 
 #define RFID_PARA_CHIP         2        //芯片类型
+
+#define RFID_PARA_TYPEBMODULE  3        //type b卡调制深度
+
+#define AS3911_TYPEB_MODULATION     233
+#define AS3911_TYPEA_RECEIVE        0xD8
+#define AS3911_TYPEB_RECEIVE        0xD8 
 /**********************************************************************
 
                          数据结构定义
@@ -240,8 +246,8 @@ typedef struct{
 //	uchar  Timerflg;         //定时器中断使用标志 0x01-time0,0x02-time1,0x04-time2,0x08-time3
 	uchar gPN512NFCIP;
 	uchar gMifareKey[6];     //Mifare卡认证密钥key a/b
-    uchar gTypeArec;    //as3911 type a接收灵敏度
-    uchar gTypeBrec;    //as3911 type b接收灵敏度
+//    uchar gTypeArec;    //as3911 type a接收灵敏度
+//    uchar gTypeBrec;    //as3911 type b接收灵敏度
 }_t_RfidPro_Info_;
 
 extern _t_RfidPro_Info_ gtRfidProInfo;

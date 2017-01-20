@@ -58,6 +58,10 @@ enum{
 #define CFG_ICCARD_USERCARD  1
 //#define CFG_BLUETOOTH   1
 #define CFG_RFID        1
+//    #define  EM_RC531_Module  //RC531模块
+    #define  EM_PN512_Module
+//    #define  EM_RC663_Module  //RC531模块
+    #define  EM_AS3911_Module  //AS3911模块
 #define CFG_TPRINTER     1
 //#define CFG_BATTERY     1
 //#define CFG_USBD_CDC    1
@@ -73,6 +77,9 @@ enum{
 #define CFG_SECURITY_CHIP        //IS8U256A安全芯片
 #define CFG_OPENSSL
 #define CFG_SCANER      1       // 是否定义扫描头
+//#define CFG_CURRENCY_DETECT  1  // 是否定义验钞检测紫光灯
+#define CFG_DMA_QUEUE  1  // DMA队列模式 
+//#define CFG_RFID_IDCARD 1  // DMA队列模式 
 /**
  * \brief:      SM2算法，必须同时开启SM3，单独开启无效
  * \Requires:   CFG_OPENSSL,CFG_SM3,PRODUCT_F16_2
@@ -89,6 +96,8 @@ enum{
  */
 #define CFG_SM4
 #define CFG_SE_MANAGE   //权限管理，支持IC和权限包
+
+#define CFG_UART_EXP  1 //外置串口
 #endif
 
 /*******************************************************************************

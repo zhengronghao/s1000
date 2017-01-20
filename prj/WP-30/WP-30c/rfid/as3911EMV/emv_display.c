@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -119,6 +119,12 @@ void emvDisplayUid(const u8 *uid, size_t length)
 {
     size_t index = length - 1;
 
+    if (length == 0)
+    {
+        EMV_LOG("UID length is zero");
+        return;
+    }
+    
     do
     {
         EMV_LOG("%02hhx ", uid[index]);
@@ -157,6 +163,10 @@ void emvDisplayError(s16 errorCode)
     case EMV_ERR_STOPPED:
 //        EMV_LOG("EMV: stopped error\r\n");
         EMV_LOG("stopped error\r\n");
+        break;
+    case EMV_ERR_POWEROFF_REQ:
+//        EMV_LOG("EMV: power off requested\n");
+        EMV_LOG("power off requested\n");
         break;
     default:
         EMV_LOG("EMV: unkown error code\r\n");

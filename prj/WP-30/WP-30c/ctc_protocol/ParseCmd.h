@@ -89,6 +89,7 @@
 #define CMDST_IC_CODE_ER        0X0022//卡密码出错
 #define CMDST_IC_CODECOUNT_ER   0X0023//卡有效次数用尽
 #define CMDST_IC_LOCK_ER        0X0024//卡片已锁定
+#define CMDST_RF_MULCARD_ER			0x0025//RF卡多卡出错
 /* 命令码*/
 /* 磁卡*/
 #define CMD_MAGCARD			      0xA3
@@ -223,9 +224,10 @@
 #define CMD_EMV_EXTEND_SET_ATTRIBUTE         0x29  // 扩展指令，设置emv相关属性
 #define CMD_EMV_EXTEND_GET_ATTRIBUTE         0x2A  // 扩展指令，获取emv相关属性
 
-
-
-
+/* currency detect */
+#define CMD_CURRENCYDETE                      0xE5   
+#define CMD_CURRENCYDETE_OPEN                 0x01   
+#define CMD_CURRENCYDETE_CLOSE                0x02   
 
 /*系统管理*/
 #define CMD_SYS_MANAGE         0xA1     //系统管理
@@ -259,6 +261,8 @@
 #define CMD_TERMINAL_INFO       0xD1   //终端信息
 #define CMD_TERMINAL_INFO_SOFT  0x01   //CPU软件版本    
 #define CMD_TERMINAL_INFO_HARD  0x02   //CPU硬件版本
+#define CMD_TERMINAL_INFO_GETANDROID_VER  0x03   //获取android中间键的版本
+#define CMD_TERMINAL_INFO_PM    0x04   //ANDROID通知进入正常工作模式，通过这条指令，开启心跳包检测机制，开启心跳包低功耗模式
 
 ///*一维码*/
 //#define CMD_BARCODE             0xF3
@@ -281,15 +285,23 @@
 #define CMD_SCAN_RESULT_REPORT  0x04   //扫描结果上送
 #define CMD_SCAN_CANCEL         0x05   //扫描取消
 
-
-
-
 /*串口扩展*/
 #define CMD_UART_EXP       0xB4
 #define CMD_UART_EXP_OPEN        0x01 
 #define CMD_UART_EXP_CLOSE       0x02
 #define CMD_UART_EXP_READ        0x03
 #define CMD_UART_EXP_WRITE       0x04
+
+/*IDCARD_CARD*/
+#define CMD_IDCARD               0xD5 //身份证
+#define CMD_IDCARD_OPEN          0x01 //打开
+#define CMD_IDCARD_CLOSE         0X02 //关闭
+#define CMD_IDCARD_SEARCH        0x03 //寻卡
+#define CMD_IDCARD_READ_WORD_PHOTO 0x04 //读卡
+#define CMD_IDCARD_ACTIVE        0x05 //激活卡
+#define CMD_IDCARD_APDU_GETTHROUTH  0x06 // 透传
+#define CMD_IDCARD_FINGER_PRINT  0x07 //读指纹
+
 
 typedef struct packet_mcu
 {

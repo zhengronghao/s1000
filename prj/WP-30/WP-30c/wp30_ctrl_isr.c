@@ -33,11 +33,24 @@ void SysTick_Handler(void)
 //        TRACE("\ncore_clk_khz:%d\n",core_clk_khz);
 //    }
 }
+extern int idcard_scl_isr(void);
+extern int idcard_sda_isr(void);
 void PORTA_IRQHandler(void)
 {
 #if (defined CFG_ICCARD)
     IC_IO_IRQHandler();
     IC_INT_IRQHandler();
+#endif
+
+#if (defined CFG_RFID_IDCARD)
+    if (PORTx_IRQPinx(IDCARD_SCL_GPIO_PORT, IDCARD_SCL_GPIO_PORT_PIN)) {
+          PORTx_IRQPinx_Clear(IDCARD_SCL_GPIO_PORT, IDCARD_SCL_GPIO_PORT_PIN);
+        idcard_scl_isr();
+    }
+    if (PORTx_IRQPinx(IDCARD_SDA_GPIO_PORT, IDCARD_SDA_GPIO_PORT_PIN)) {
+        PORTx_IRQPinx_Clear(IDCARD_SDA_GPIO_PORT, IDCARD_SDA_GPIO_PORT_PIN);
+        idcard_sda_isr();   
+    }
 #endif
 }
 

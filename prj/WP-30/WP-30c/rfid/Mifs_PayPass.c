@@ -54,6 +54,25 @@
 #define EM_paypass_polltime        5000 //type a/b卡 轮询间隔时间
 #define EM_paypass_minFDTadtime    250  //pcd发送帧保护时间FDTmin
 
+const s_RFpara_table gRFparatable[] = 
+{
+//    {STAR_WP70V100, RFID_Module_AS3911, {{0,0xB4,AS3911_TYPEB_MODULATION}, {1,0xA6,AS3911_TYPEB_MODULATION}, {2,0x88,AS3911_TYPEB_MODULATION}, {3,0x66,AS3911_TYPEB_MODULATION}}},
+//    {STAR_WP70V101, RFID_Module_AS3911, {{0,0xD0,AS3911_TYPEB_MODULATION}, {1,0xC8,AS3911_TYPEB_MODULATION}, {2,0xA6,AS3911_TYPEB_MODULATION}, {3,0x90,AS3911_TYPEB_MODULATION}}},
+//    {STAR_WP70V102, RFID_Module_AS3911, {{0,0xD0,AS3911_TYPEB_MODULATION}, {1,0xC8,AS3911_TYPEB_MODULATION}, {2,0xA6,AS3911_TYPEB_MODULATION}, {3,0x90,AS3911_TYPEB_MODULATION}}},
+//    {STAR_WP70V200, RFID_Module_AS3911, {{0,0xB8,AS3911_TYPEB_MODULATION}, {1,0xA6,AS3911_TYPEB_MODULATION}, {2,0xA0,AS3911_TYPEB_MODULATION}, {3,0x90,AS3911_TYPEB_MODULATION}}},
+//    {STAR_WP70V200, RFID_Module_PN512,  {{0,0x38,0}, {1,0x38,0}, {2,0x38,0}, {3,0x38,0}}},
+//    {STAR_WP70V300, RFID_Module_PN512,  {{0,0x25,0}, {1,0x30,0}, {2,0x38,0}, {3,0x3F,0}}},
+//
+////    {STAR_S980EV100, RFID_Module_AS3911,{{0,0xD0,0xD0}, {1,0x70,AS3911_TYPEB_MODULATION}, {2,0x60,AS3911_TYPEB_MODULATION}, {3,0x00,AS3911_TYPEB_MODULATION}}},
+//    {STAR_S980EV100, RFID_Module_AS3911,{{0,0xDC,0xD0}, {1,0x70,0xB0}, {2,0x60,0xAC}, {3,0x00,0x96}}},
+    {STAR_S1000V100, RFID_Module_PN512,  {{0,0x38,0}, {1,0x38,0}, {2,0x38,0}, {3,0x38,0}}},
+
+    //出错默认
+    {0xFFFF, 0xFF,  {{0,0x38,0}, {1,0x38,0}, {2,0x38,0}, {3,0x38,0}}}
+};
+
+s_rfidpara_info *gRFPowerPtr = NULL;
+
 _t_RfidDebugInfo_ gtRfidDebugInfo;
 #ifdef RFID_ENABLE_REG
 _t_RfidReg_Info_ gtRfidRegInfo = {
@@ -63,6 +82,14 @@ _t_RfidReg_Info_ gtRfidRegInfo = {
 #endif
 
 #ifdef EM_PN512_Module
+s_MIFS_REG_table gcMifRegtable[] = {
+//    {STAR_WP70V200, RFID_Module_PN512,{0x84,0x55,0x4D,0x38,0x78,0x82,0x38,0x05}},
+//    {STAR_WP70V300, RFID_Module_PN512,{0x84,0x55,0x4D,0x38,0x78,0x82,0x30,0x09}},
+    {STAR_S1000V100, RFID_Module_PN512,{0x7B,0x6B,0x5D,0x38,0x78,0x82,0x38,0x19}},
+
+    //出错默认
+    {0xFFFF, 0xFF,{0x7B,0x6B,0x5D,0x38,0x78,0x82,0x38,0x19}}
+};
 MIFS_REG gcMifReg = {
 //#if Product_Type == Product_3
 //	#if PCD_TYPE == PCD_F11
@@ -82,12 +109,153 @@ MIFS_REG gcMifReg = {
     0x7B,0x6B,0x5D,0x38,0x78,0x82,0x38,0x19
 };
 #endif
+
+#ifdef EM_AS3911_Module
+s_3911REG_table g3911Regtable[] = {
+//    {STAR_WP70V100, RFID_Module_AS3911,{AS3911_TYPEB_MODULATION,0xD8,0xD8,0}},
+//    {STAR_WP70V101, RFID_Module_AS3911,{AS3911_TYPEB_MODULATION,AS3911_TYPEA_RECEIVE,AS3911_TYPEB_RECEIVE,0}},
+//    {STAR_WP70V200, RFID_Module_AS3911,{0xD2,0xD8,0xD8,0}},
+//    {STAR_S980EV100, RFID_Module_AS3911,{AS3911_TYPEB_MODULATION,AS3911_TYPEA_RECEIVE,AS3911_TYPEB_RECEIVE,0}},
+    {STAR_S1000V100, RFID_Module_AS3911,{AS3911_TYPEB_MODULATION,AS3911_TYPEA_RECEIVE,AS3911_TYPEB_RECEIVE,0}},
+
+    //出错默认
+    {0xFFFF, 0xFF,{AS3911_TYPEB_MODULATION,AS3911_TYPEA_RECEIVE,AS3911_TYPEB_RECEIVE,0}}
+};
+
+s_3911REG_info gas3911Reg = {
+    AS3911_TYPEB_MODULATION,0xD8,0xD8,0
+};
+#endif
 /*****************************************************************
 
                           函数定义
 
 ******************************************************************/
-extern int s_rfid_getPara(int module, int para, int index, s_rfidpara_info *rfdata);
+//获取射频参数
+int s_rfid_getPara(int module, int para, int index, s_rfidpara_info *rfdata)
+{
+	int ret = ERROR;
+	int i;
+    s_rfidpara_info *ptr;
+
+#if 0
+    if ( module ==  RFID_Module_RC531) {
+        ptr = (s_rfidpara_info *)rfidpara_rc531;
+    }else if ( module == RFID_Module_AS3911 ) {
+        ptr = (s_rfidpara_info *)rfidpara_as3911;
+    }else if ( module == RFID_Module_PN512 ) {
+        ptr = (s_rfidpara_info *)rfidpara_FM17550_V1;
+    }else
+        return ret;
+#endif
+
+    ptr = gRFPowerPtr;
+
+//    Dprintk("\r\n module:%x para:%d index:%d",module,para,index);
+    if ( para == RFID_PARA_PWR) {
+        for ( i = 0 ; i < DIM(gRFparatable[0].powertable) ; i++ ) {
+            if ( ptr[i].index == index ) {
+                *rfdata = ptr[i];
+//                Dprintk("\r\n index:%d  pwr:%x",rfdata->index,rfdata->pwrfield);
+                return OK;
+            }
+        }
+    }
+
+//    Dprintk("\r\n error module:%x para:%d index:%d",module,para,index);
+    *rfdata = ptr[0];//出错 默认值
+	return ret;
+}
+
+int s_17550para_init(int product, int Rfmodule)
+{
+#ifdef EM_PN512_Module
+    int i;
+    int ret = -1;
+
+    gcMifReg = gcMifRegtable[DIM(gcMifRegtable)-1].RFpara; //默认配置
+    if ( Rfmodule != RFID_Module_PN512 ) {
+        return 0;
+    }
+    for ( i = 0 ; i < DIM(gcMifRegtable) ; i++ ) {
+        if ((product == gcMifRegtable[i].ProductType) && (Rfmodule == gcMifRegtable[i].RFtype)) {
+            gcMifReg = gcMifRegtable[i].RFpara;
+            ret = 0;
+        }
+    }
+//    Dprintk("\r\n\r\n 17550 para");
+//    DISPBUF((uchar *)&gcMifReg, sizeof(gcMifReg),0);
+    return ret;
+#else
+    return 0;
+#endif
+}
+
+int s_as3911para_init(int product, int Rfmodule)
+{
+#ifdef EM_AS3911_Module
+    int i;
+    int ret = -1;
+
+    gas3911Reg = g3911Regtable[DIM(g3911Regtable)-1].RFpara; //默认配置
+    if ( Rfmodule != RFID_Module_AS3911 ) {
+        return 0;
+    }
+    for ( i = 0 ; i < DIM(g3911Regtable) ; i++ ) {
+        if ((product == g3911Regtable[i].ProductType) && (Rfmodule == g3911Regtable[i].RFtype)) {
+            gas3911Reg = g3911Regtable[i].RFpara;
+            ret = 0;
+        }
+    }
+//    Dprintk("\r\n\r\n 3911 para");
+//    DISPBUF((uchar *)&gas3911Reg, sizeof(gas3911Reg),0);
+    return ret;
+#else
+    return 0;
+#endif
+}
+
+int s_rfidpara_init(int product, int Rfmodule)
+{
+    int i;
+    int powret = -1;
+    int para17550 = -1;
+    int para3911 = -1;
+
+//    Dprintk("\r\n product:%x  module:%x",product,Rfmodule);
+    gRFPowerPtr = (s_rfidpara_info *)gRFparatable[DIM(gRFparatable)-1].powertable;//默认按最后配置17550
+    for ( i = 0 ; i < DIM(gRFparatable) ; i++ ) {
+        if ((product == gRFparatable[i].ProductType) && (Rfmodule == gRFparatable[i].RFtype)) {
+            gRFPowerPtr = (s_rfidpara_info *)gRFparatable[i].powertable;
+            powret = 0;
+            break;
+        }
+    }
+
+//    TRACE("\r\n\r\n power ret:%d",powret);
+//    for ( i = 0 ; i < 4 ; i++ ) {
+//        TRACE("\r\n power index:%d  value:%x",gRFPowerPtr[i].index,gRFPowerPtr[i].pwrfield);
+//    }
+    
+    para17550 = s_17550para_init(product, Rfmodule);
+//    TRACE("\r\n\r\n para17550 ret:%d",para17550);
+//    DISPBUF("17550",sizeof(gcMifReg),0,(uchar *)&gcMifReg);
+
+    para3911 = s_as3911para_init(product, Rfmodule);
+    
+    if ( (powret == 0) 
+         && (para17550 == 0) 
+         && (para3911 == 0)) 
+    {
+        return 0;
+    }
+//    TRACE("\r\n\r\n Error pararet");
+//    for ( i = 0 ; i < 4 ; i++ ) {
+//        TRACE("\r\n power index:%d  value:%x",gRFPowerPtr[i].index,gRFPowerPtr[i].pwrfield);
+//    }
+//    DISPBUF("pwr",sizeof(gcMifReg),0,(uchar *)&gcMifReg);
+    return -1;
+}
 /*****************************************************************
 * 函数名称：
 *        s_rfid_init
@@ -159,6 +327,10 @@ void s_rfid_init(void)
 	EG_mifs_tWorkInfo.FSC = EM_mifs_FSC_Default;
 	EG_mifs_tWorkInfo.FSD = EM_mifs_FSD_Default;
 
+    module_type = s_getProduct();
+    ret = s_rfidpara_init(module_type, (int)EG_mifs_tWorkInfo.RFIDModule);
+//    TRACE("\r\n get para:%d",ret);
+
     //先获取默认参数
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
         s_rfid_getPara(EG_mifs_tWorkInfo.RFIDModule, RFID_PARA_PWR, RFID_DEFAULT_PWR, &rfdata);
@@ -166,8 +338,9 @@ void s_rfid_init(void)
 #ifdef EM_PN512_Module
     else if (  EG_mifs_tWorkInfo.RFIDModule == RFID_Module_PN512  ) {
         s_rfid_getPara(EG_mifs_tWorkInfo.RFIDModule, RFID_PARA_PWR, RFID_DEFAULT_PWR, &rfdata);
-        gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
-        gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[RFID_DEFAULT_PWR].pwrfield;
+//        gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
+//        gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[RFID_DEFAULT_PWR].pwrfield;
+        gcMifReg.CWGsP = (uchar)rfdata.pwrfield;
     }
 #endif
     else{
@@ -194,14 +367,26 @@ void s_rfid_init(void)
         if ( !ret ) {
             gtRfidDebugInfo.CW_A = rfdata.pwrfield;
             gtRfidDebugInfo.CW_B = gtRfidDebugInfo.CW_A;
+#ifdef EM_AS3911_Module
+            gas3911Reg.gTypeBmodule = rfdata.regpara;
+#endif
 #ifdef EM_PN512_Module
             if (  EG_mifs_tWorkInfo.RFIDModule == RFID_Module_PN512  ){
-                gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
-                gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[index].pwrfield;
+//                gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
+//                gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[index].pwrfield;
+                gcMifReg.CWGsP = (uchar)rfdata.pwrfield;
             }
 #endif
         }
     }
+
+#ifdef EM_AS3911_Module
+    //读取系统信息区调制深度
+    ReadRfid_Para_Get(RFID_PARA_TYPEBMODULE, &index);
+    if ( (index > 0) && (index < 0xFF) ) {
+        gas3911Reg.gTypeBmodule = (uchar)index;
+    }
+#endif
 
 //    Dprintk("\r\n after pwr:%x ",gtRfidDebugInfo.CW_A);
 
@@ -1839,6 +2024,7 @@ void EI_paypass_vOptField(uchar mode)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        data = data;
         emvHalActivateField(mode);
 #endif
 
@@ -3597,20 +3783,38 @@ uchar EI_paypass_ucPOLL(uchar * pucMifType)
 		// 感应区没有TypeA卡响应，说明感应区内没有TypeA卡存在
 		// 接下来应该判断是否TypeB卡存在
 		EI_paypass_vSelectType(EM_mifs_TYPEB);
-		EI_paypass_vDelay(EM_mifs_TPDEALY);	// 延时500ETU
+//		EI_paypass_vDelay(EM_mifs_TPDEALY);	// 延时500ETU
+        s_DelayUs(EM_paypass_polltime); //emv要求(针对RC531) 调整时间
 		//s_DelayMs(50);
 		// 接下来判断是否有TypeB卡存在
+        j = 0;
 		result = EI_paypass_ucWUPB(&ucTempData, ucATQB);
 		if (result == EM_mifs_TRANSERR)
 		{
 			for (i = 0; i < 10; i++)
 			{
 				result = EI_paypass_ucWUPB(&ucTempData, ucATQB);
+//                TRACE("\r\n\r\n i:%d  j:%d  result:%x",i,j,result);
 				if (result != EM_mifs_TRANSERR)
 				{
+                    j = 0;
 					break;
-				}
+				}else{
+                    j++;
+                    if ( j > 1 ) {
+                        //type b 两次以上就返回数据错误就认为是多卡冲突
+                        return EM_mifs_MULTIERR;
+                    }
+                }
 			}
+//			for (i = 0; i < 10; i++)
+//			{
+//				result = EI_paypass_ucWUPB(&ucTempData, ucATQB);
+//				if (result != EM_mifs_TRANSERR)
+//				{
+//					break;
+//				}
+//			}
 		}
 		if (result == EM_mifs_SUCCESS)
 		{
@@ -4970,6 +5174,8 @@ uchar EI_ucAnticoll(uchar ucSEL, uchar * pucUID)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        select = select;
+        getcol = getcol;
 //        ucCMD = EMV_HAL_TRANSCEIVE_WITHOUT_CRC;
 //        EG_mifs_tWorkInfo.expectMaxRec = 5;
 //		EI_paypass_vSetTimer(EM_mifs_DEFAULT);

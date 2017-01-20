@@ -560,6 +560,7 @@ int ped_load_key(uint16_t length,uint8_t *packet)
     if ( (length < sizeof(struct PEDLoadKeyHead)+2)
         || (length != COMBINE16(packet[1],packet[0])+2)) {
         TRACE("\r\nKEY LEN%d, len:%d",length, COMBINE16(packet[1],packet[0])+2);
+        TRACE_BUF("KEY:",  packet, length);
         return RTV_PED_ERR;
     }
     length -= 2;
@@ -616,6 +617,7 @@ int ped_load_key(uint16_t length,uint8_t *packet)
 
         break;
     default:
+        TRACE("\r\ncheckmode err\r\n"); 
         iRet = RTV_PED_ERR;
         break;
     }

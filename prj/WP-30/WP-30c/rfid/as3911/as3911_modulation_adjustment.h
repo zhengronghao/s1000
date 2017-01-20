@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -91,8 +91,37 @@ typedef struct _AS3911ModulationLevelTable_
 typedef struct _AS3911ModulationLevelAutomaticAdjustmentData_
 {
 	u8 targetValue; /*!< Target value for the AS3911 automatic modulation depth adjustment. */
+	u8 hysteresis; /*!< Hysteresis for doing adjustment again */
 	u16 delay; /*!< Time to wait after automatic modulation depth adjustment (µs). */
 } AS3911ModulationLevelAutomaticAdjustmentData_t;
+
+struct AS3911OutputLevels
+{
+    u8 lowRed; /*!< low level reduction value for reg 0x27 */
+    u8 highRed;/*!< high level reduction value for reg 0x27 */
+    u8 decThresh;/*!< amplitude threshold for going high->low */
+    u8 incThresh;/*!< amplitude threshold for going low->high  */
+};
+
+struct AS3911GainTableVal
+{
+       u8 amp;
+       u8 phase;
+       u8 reg02;
+       u8 regA;
+       u8 regB;
+       u8 regC;
+       u8 regD;
+};
+
+struct AS3911GainTable
+{
+       int     num_vals;
+       struct  AS3911GainTableVal table[16];
+       int used_id;
+       const char *text;
+};
+
 
 /*
 ******************************************************************************
@@ -160,6 +189,8 @@ void as3911SetModulationLevelMode(AS3911ModulationLevelMode_t modulationLevelMod
 void as3911GetModulationLevelMode(AS3911ModulationLevelMode_t *modulationLevelMode
     , const void *modulationLevelModeData);
 
+void as3911SetOutputLevels(const struct AS3911OutputLevels *outputLevels);
+
 /*! \ingroup as3911RfidCom
  *****************************************************************************
  * \brief Adjust the modulation level.
@@ -173,4 +204,11 @@ void as3911GetModulationLevelMode(AS3911ModulationLevelMode_t *modulationLevelMo
  */
 void as3911AdjustModulationLevel();
 
+/*! \ingroup as3911RfidCom
+ *****************************************************************************
+ * \brief Provide gain table which will be applied when adjusting (modulation) level
+ *
+ *****************************************************************************
+ */
+void as3911SetGainTables(const struct AS3911GainTable *gainTableLow, const struct AS3911GainTable *gainTableNorm );
 #endif /* AS3911_MODULATION_ADJUSTMENT_H */

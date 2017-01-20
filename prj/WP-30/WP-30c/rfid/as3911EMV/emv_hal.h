@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -240,6 +240,13 @@ s8 emvHalTransceive(u8 *request, size_t requestLength,
  *****************************************************************************
  */
 s8 emvHalSetAs3911TypeBModulationMode(AS3911ModulationLevelMode_t modulationLevelMode, const void *modulationLevelModeData);
+ 
+/*! \ingroup emvHal
+ *****************************************************************************
+ * \brief Set Gain tables for low and normal level of type B and type A
+ *****************************************************************************
+ */
+s8 emvHalSetAs3911GainTables(const void * lowA, const void * lowB, const void * normA,const void * normB);
  
 void s_as3911_init(void);
 void s_as3911_SetInt(uint mode);

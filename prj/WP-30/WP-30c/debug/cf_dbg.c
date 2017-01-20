@@ -615,48 +615,77 @@ int rfid_pwrtest(int mode)
                 ret = rfid_poll(RFID_MODE_EMV,&type);
                 if(!ret)
                 {
-                    TRACE("寻卡:[%d]",card_type[type]);
-                    TRACE("上电:");
+                    TRACE("\r\n寻卡:[%d]",card_type[type]);
+                    TRACE("\r\n上电:");
                     ret = rfid_powerup(type,(uint *)&j,buf);
                     if(!ret)
                     {
-                        TRACE("上电:成功 %s",rfid_card_string[buf[j-1]]);
-                        TRACE("读卡...");
+                        TRACE("\r\n上电:成功 %s",rfid_card_string[buf[j-1]]);
+                        TRACE("\r\n读卡...");
                         if(buf[j-1] >= EM_mifs_PROCARD)
                         {
                             for ( i = 0 ; i<5 ; i++ ) {
                                 ret = rfid_exchangedata(sizeof(gApduGet4rand), (uchar *)gApduGet4rand,(uint *)&j,buf);
                                 if(ret == 0 || ret == EM_mifs_SWDIFF)
                                 {
-                                    TRACE("读卡:成功[%02X-%02X]",buf[j-2],buf[j-1]);
+                                    TRACE("\r\n读卡:成功[%02X-%02X]",buf[j-2],buf[j-1]);
                                     sys_beep_pro(BEEP_PWM_HZ,30,YES);
                                 }
                                 else
                                 {
-                                    TRACE("读卡:失败[%d]",ret);
+                                    TRACE("\r\n读卡:失败[%d]",ret);
                                 }
                             }
                         }
                     }
                     else
                     {
-                        TRACE("上电:失败[%d]",ret);
+                        TRACE("\r\n上电:失败[%d]",ret);
                     }
                     rfid_powerdown();
                 }
                 else
                 {
-                    TRACE("寻卡:失败[%d]",ret);
+                    TRACE("\r\n寻卡:失败[%d]",ret);
                 }
+                rfid_powerdown();
             }
 //            rfid_close();
             break;
         case 3:
-            if (  EG_mifs_tWorkInfo.RFIDModule == RFID_Module_RC531  ) {
-                Dprintk("\r\n set the rc531 power type a:%d",gtRfidDebugInfo.CW_A);
-                gtRfidDebugInfo.CW_A = InkeyCount(0);
-                Dprintk("\r\n set the rc531 power type b");
-                gtRfidDebugInfo.CW_B = InkeyCount(0);
+//            if (  EG_mifs_tWorkInfo.RFIDModule == RFID_Module_RC531  ) {
+//                Dprintk("\r\n set the rc531 power type a:%d",gtRfidDebugInfo.CW_A);
+//                gtRfidDebugInfo.CW_A = InkeyCount(0);
+//                Dprintk("\r\n set the rc531 power type b");
+//                gtRfidDebugInfo.CW_B = InkeyCount(0);
+//            }
+            rfid_open(0);
+            lcd_cls();
+            while ( 1 ) {
+                if ( IfInkey(0) ) {
+                    break;
+                }
+                s_DelayMs(800);
+                ret = rfid_poll(RFID_MODE_EMV,&type);
+                if(!ret)
+                {
+                    ret = rfid_powerup(type,(uint *)&j,buf);
+                    if(!ret)
+                    {
+                        TRACE("\r\n上电:成功 %s",rfid_card_string[buf[j-1]]);
+                        TRACE("\r\n读卡...");
+                        sys_beep();
+                    }
+                    else
+                    {
+                        TRACE("\r\n上电:失败[%d]",ret);
+                    }
+                }
+                else
+                {
+                    TRACE("\r\n寻卡:失败[%d]",ret);
+                }
+                rfid_powerdown();
             }
             break;
         case 4:
@@ -669,7 +698,7 @@ reg27hflg = 1;
 gtRfidDebugInfo.CW_A = ret;
 
                 as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, (uchar)ret); //根据硬件调节0x9F
-                as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x7E, 0x1E);
+                as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x7E, 0x1E);
                 as3911ClearInterrupts(AS3911_IRQ_MASK_DCT);
                 as3911EnableInterrupts(AS3911_IRQ_MASK_DCT);
                 as3911ExecuteCommand(AS3911_CMD_CALIBRATE_MODULATION);
@@ -737,7 +766,7 @@ gtRfidDebugInfo.CW_A = ret;
             Dprintk("\r\n\r\n reg 20h  :%x   %d",ucVal, ucVal);
             break;
         case 9:
-            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x80);
+            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x80);
             emvHalSetAs3911TypeBModulationMode(AS3911_MODULATION_LEVEL_FROM_AMPLITUDE, buf);
             break;
         case 10:
@@ -1105,7 +1134,7 @@ reg27hflg = 1;
 gtRfidDebugInfo.CW_A = ret;
 
                 as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, (uchar)ret); //根据硬件调节0x9F
-//                as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x7E, 0x1E);
+//                as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x7E, 0x1E);
 //                as3911ClearInterrupts(AS3911_IRQ_MASK_DCT);
 //                as3911EnableInterrupts(AS3911_IRQ_MASK_DCT);
 //                as3911ExecuteCommand(AS3911_CMD_CALIBRATE_MODULATION);
@@ -1120,7 +1149,7 @@ gtRfidDebugInfo.CW_A = ret;
         case 7:
             Dprintk("\r\n\r\n input the count");
             gTypeBmodulation = InkeyCount(0);
-            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x80);//固定type b调制深度
+            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x80);//固定type b调制深度
             as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, gTypeBmodulation);
             break;
         case 8:
@@ -1139,13 +1168,13 @@ gtRfidDebugInfo.CW_A = ret;
             Dprintk("\r\n\r\n reg 20h  :%x   %d",ucVal, ucVal);
             break;
         case 9:
-            Dprintk("\r\n\r\n set typeA/B receive type A:%x   type B:%x",gtRfidProInfo.gTypeArec, gtRfidProInfo.gTypeBrec);
+            Dprintk("\r\n\r\n set typeA/B receive type A:%x   type B:%x",gas3911Reg.gTypeArec, gas3911Reg.gTypeBrec);
             Dprintk("\r\n 7=fcH 0=00H 1=24H 2=48H 3=6CH 4=90H 5=B4H 6=d8");
             Dprintk("\r\n set type A");
-            gtRfidProInfo.gTypeArec = InkeyHex(0);
+            gas3911Reg.gTypeArec = InkeyHex(0);
             Dprintk("\r\n set type B");
-            gtRfidProInfo.gTypeBrec = InkeyHex(0);
-            Dprintk("\r\n\r\n  type A:%x   type B:%x",gtRfidProInfo.gTypeArec, gtRfidProInfo.gTypeBrec);
+            gas3911Reg.gTypeBrec = InkeyHex(0);
+            Dprintk("\r\n\r\n  type A:%x   type B:%x",gas3911Reg.gTypeArec, gas3911Reg.gTypeBrec);
             break;
         case 10:
             if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911) {
@@ -1177,29 +1206,29 @@ gtRfidDebugInfo.CW_A = ret;
             Dprintk("\r\n\r\n load the para");
             memset((uchar*)&rfidinfo, 0xFF, sizeof(MODULE_RFID_INFO));
             s_sysinfo_rfidinfo(0, &rfidinfo);
-            gTypeBmodulation = rfidinfo.rfu[0];
-            gtRfidProInfo.gTypeArec        = rfidinfo.rfu[1];
-            gtRfidProInfo.gTypeBrec        = rfidinfo.rfu[2];
+            gTypeBmodulation = rfidinfo.gTypeBmodule;
+            gas3911Reg.gTypeArec        = rfidinfo.gTypeArec;
+            gas3911Reg.gTypeBrec        = rfidinfo.gTypeBrec;
             gtRfidDebugInfo.CW_A      = rfidinfo.irfu[0];
             as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, gtRfidDebugInfo.CW_A);
-            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x80);//固定type b调制深度
+            as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x80);//固定type b调制深度
             as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, gTypeBmodulation);
             Dprintk("\r\n\r\n gTypeBmodulation:%d",gTypeBmodulation);
-            Dprintk("\r\n\r\n gTypeArec:%x",gtRfidProInfo.gTypeArec);
-            Dprintk("\r\n\r\n gTypeBrec:%x",gtRfidProInfo.gTypeBrec);
+            Dprintk("\r\n\r\n gTypeArec:%x",gas3911Reg.gTypeArec);
+            Dprintk("\r\n\r\n gTypeBrec:%x",gas3911Reg.gTypeBrec);
             Dprintk("\r\n\r\n gtRfidDebugInfo.CW_A:%x",gtRfidDebugInfo.CW_A);
             break;
         case 13:
             Dprintk("\r\n\r\n save the para");
             Dprintk("\r\n\r\n gTypeBmodulation:%d",gTypeBmodulation);
-            Dprintk("\r\n\r\n gTypeArec:%x",gtRfidProInfo.gTypeArec);
-            Dprintk("\r\n\r\n gTypeBrec:%x",gtRfidProInfo.gTypeBrec);
+            Dprintk("\r\n\r\n gTypeArec:%x",gas3911Reg.gTypeArec);
+            Dprintk("\r\n\r\n gTypeBrec:%x",gas3911Reg.gTypeBrec);
             Dprintk("\r\n\r\n gtRfidDebugInfo.CW_A:%x",gtRfidDebugInfo.CW_A);
             memset((uchar*)&rfidinfo, 0xFF, sizeof(MODULE_RFID_INFO));
             s_sysinfo_rfidinfo(0, &rfidinfo);
-            rfidinfo.rfu[0] = gTypeBmodulation;
-            rfidinfo.rfu[1] = gtRfidProInfo.gTypeArec;
-            rfidinfo.rfu[2] = gtRfidProInfo.gTypeBrec;
+            rfidinfo.gTypeBmodule = gTypeBmodulation;
+            rfidinfo.gTypeArec = gas3911Reg.gTypeArec;
+            rfidinfo.gTypeBrec = gas3911Reg.gTypeBrec;
             rfidinfo.irfu[0] = gtRfidDebugInfo.CW_A;
             s_sysinfo_rfidinfo(1, &rfidinfo);
             break;

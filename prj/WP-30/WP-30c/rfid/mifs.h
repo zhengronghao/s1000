@@ -238,6 +238,7 @@ typedef struct
 {
     int     index;
     int     pwrfield;
+    int     regpara;  //对于3911 type b的调制深度
 }s_rfidpara_info;
 #define S50BLK_SIZE			4
 #define S70BLK_SIZE_PRE32	4
@@ -249,7 +250,12 @@ typedef struct
 #define S70SECTOR_SIZE_LAST8	8
 #define S70SECTOR_SIZE			(S70SECTOR_SIZE_PRE32+S70SECTOR_SIZE_LAST8)
 
-
+typedef struct
+{
+    int     ProductType; //产品参照gProductType
+    int     RFtype;      //非接芯片类型参照RFIDModule
+    s_rfidpara_info powertable[4]; //功率寄存器
+}s_RFpara_table;
 /**********************************************************************
 
                          接口定义
@@ -416,7 +422,8 @@ extern "C"
     int rfid_ResetField(int para);
     int adjust_rfid_PwrFieldSetTime(int mode);
     int adjust_rfid_PwrField(int mode);
-//    int rfid_type_menu(int mode);
+    int adjust_rfid_TypeBModule(int mode);
+    int rfid_type_menu(int mode);
     int ReadRfid_Para_Get(int paramIndex, int *param);
     int WriteRfid_Para_Set(int paramIndex, int param);
 

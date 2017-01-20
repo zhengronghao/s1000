@@ -66,5 +66,22 @@ void hw_led_on(uint32_t ledbit)
     }
 }
 
+#ifdef CFG_CURRENCY_DETECT
+
+void hw_currencyDetect_init(void)
+{
+    gpio_set_output(CURRECYDETECT_PTx,GPIO_OUTPUT_SlewRateFast,0); 
+}
+void hw_currencyDetect_open(void)
+{
+    gpio_set_bit(CURRECYDETECT_PTx,1);
+}
+void hw_currencyDetect_close(void)
+{
+    gpio_set_bit(CURRECYDETECT_PTx,0);
+}
+
+#endif
+
 
 

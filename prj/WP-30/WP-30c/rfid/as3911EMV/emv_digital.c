@@ -109,7 +109,7 @@ s16 emvDigitalApplication()
     }else
         emvDisplayError(error);
 
-    while ((responseLength >= 3) && (emvResponseBuffer[1] != 0x70))
+    while ((responseLength >= 3) && (emvResponseBuffer[1] != 0x70) && (emvResponseBuffer[1] != 0x72))
     {
 //        emvDisplayCAPDU(emvResponseBuffer, responseLength - 2);
 
@@ -124,6 +124,8 @@ s16 emvDigitalApplication()
             return error;
         }
     }
+    if (emvResponseBuffer[1] == 0x72)
+        error = EMV_ERR_POWEROFF_REQ;
 
     return error;
 }

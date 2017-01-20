@@ -15,6 +15,9 @@ void hw_led_init(void);
 void hw_led_on(uint32_t ledbit);
 void hw_led_off(uint32_t ledbit);
 
+void hw_currencyDetect_init(void);
+void hw_currencyDetect_open(void);
+void hw_currencyDetect_close(void);
 #endif
 
 

@@ -431,6 +431,7 @@ int drv_uart_dma_close(UARTn uartch, int channel)
 
 //    drv_dma_stop();
     drv_dma_disable( channel);
+    drv_dma_clock_disable();
     UART_C2_REG(UARTx[uartch]) &= ~(UART_C2_TE_MASK
                                     | UART_C2_RE_MASK );
     /* disable the clock to the UARTx */    

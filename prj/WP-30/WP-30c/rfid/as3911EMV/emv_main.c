@@ -134,9 +134,9 @@ s16 emvStartTerminalApplication(s16 (*application)(void))
 
     guiDebugi = 0;
     gemvdebugflg.polldeflg = 0;
-    gemvdebugflg.acolldeflg = 1;
-    gemvdebugflg.activedeflg = 1;
-    gemvdebugflg.apdudeflg = 1;
+    gemvdebugflg.acolldeflg = 0;
+    gemvdebugflg.activedeflg = 0;
+    gemvdebugflg.apdudeflg = 0;
     /* Implementation:
      * Error checking is done at the beginning of the while loop because
      * error handling is the same for all stages of the terminal main loop.
@@ -146,36 +146,41 @@ s16 emvStartTerminalApplication(s16 (*application)(void))
     while(1)
     {
         EmvPicc_t picc;
-
+        if(kb_hit())//cf20140423
+        {
+            return EMV_ERR_STOPPED;
+        }    
         if ( IfInkey(0)) {
 
-            EMV_DIS("\r\n----press 99-exit 1-debug\r\n");
-            removeret = InkeyCount(0);
-            if ( removeret == 99 ) {
-                /* Received stop request, stop terminal main loop. */
-                return EMV_ERR_STOPPED;
-            }else if (removeret == 1){
-                displayCardinfo();
-                TRACE("\r\n\r\n -----111-debug information-------");
-                //            DISPBUF(gcDebugBuf, guiDebugi, 0);
-                vDispBufKey(guiDebugi,gcDebugBuf);
-            }
-            guiDebugi = 0;
+//            EMV_DIS("\r\n----press 99-exit 1-debug\r\n");
+//            removeret = InkeyCount(0);
+//            if ( removeret == 99 ) {
+//                /* Received stop request, stop terminal main loop. */
+//                return EMV_ERR_STOPPED;
+//            }else if (removeret == 1){
+//                displayCardinfo();
+//                TRACE("\r\n\r\n -----111-debug information-------");
+//                //            DISPBUF(gcDebugBuf, guiDebugi, 0);
+//                vDispBufKey(guiDebugi,gcDebugBuf);
+//            }
+//            guiDebugi = 0;
+            return EMV_ERR_STOPPED;
         }
         if (EMV_ERR_STOPPED == error)
         {
             /* Received stop request, stop terminal main loop. */
-            EMV_DIS("\r\n----press 99-exit 1-debug\r\n");
-            removeret = InkeyCount(0);
-            if ( removeret == 99 ) {
-                return EMV_ERR_STOPPED;
-            }else if ( removeret == 1 ){
-                displayCardinfo();
-                TRACE("\r\n\r\n ----222--debug information-------");
-                //            DISPBUF(gcDebugBuf, guiDebugi, 0);
-                vDispBufKey(guiDebugi,gcDebugBuf);
-            }
-            guiDebugi = 0;
+//            EMV_DIS("\r\n----press 99-exit 1-debug\r\n");
+//            removeret = InkeyCount(0);
+//            if ( removeret == 99 ) {
+//                return EMV_ERR_STOPPED;
+//            }else if ( removeret == 1 ){
+//                displayCardinfo();
+//                TRACE("\r\n\r\n ----222--debug information-------");
+//                //            DISPBUF(gcDebugBuf, guiDebugi, 0);
+//                vDispBufKey(guiDebugi,gcDebugBuf);
+//            }
+//            guiDebugi = 0;
+            return EMV_ERR_STOPPED;
         }
         if (EMV_ERR_OK != error)
         {
@@ -185,6 +190,14 @@ s16 emvStartTerminalApplication(s16 (*application)(void))
 
             //必须加调试信息否则影响TA305_3 出现奇怪错误待查 09022013 chenf
             emvDisplayError(error);
+
+            if (EMV_ERR_POWEROFF_REQ == error)
+            {
+                emvHalActivateField(FALSE);
+
+                emvHalSleepMilliseconds(EMV_T_POWEROFF);
+                /* Falling through to emvHalResetField below */
+            }
 
             /* Reset field and continue with polling. */
             emvHalResetField();
@@ -208,16 +221,19 @@ s16 emvStartTerminalApplication(s16 (*application)(void))
         emvDisplayMessage(EMV_M_POLLING);
 guiDebugFlg = gemvdebugflg.polldeflg;
         error = emvPoll();
+//        TRACE("\r\n poll:%d",error);
         pollret = error;
 guiDebugFlg = 0;
         if (EMV_ERR_OK != error)
             continue;
 
-        Dprintk("\r\n--acollision\r\n");
+//        Dprintk("\r\n--acollision\r\n");
         /* Anticollision. */
         sleepMilliseconds(EMV_T_P);
 guiDebugFlg = gemvdebugflg.acolldeflg;
         error = emvCollisionDetection(&picc);
+//        TRACE("\r\n coll:%d",error);
+//        s_DelayUs(300);//TB305_03 原因可能太早下电20141027 chenf
         acollret = error;
 guiDebugFlg = 0;
         if (EMV_ERR_OK != error)
@@ -226,6 +242,7 @@ guiDebugFlg = 0;
         /* Activation. */
 guiDebugFlg = gemvdebugflg.activedeflg;
         error = emvActivate(&picc);
+//        TRACE("\r\n active:%d",error);
         activeret = error;
 guiDebugFlg = 0;
         if (EMV_ERR_OK != error)
@@ -252,10 +269,30 @@ guiDebugFlg = 0;
          */
         if(picc.sfgi > 0)
         {
+#if 11
+            /* EMV_DELTA_FWT_PCD needs to be added and not shifted by FWI
+             * See: Table A.5 Annex A.4, change request 10.3.5.5 and 10.3.5.8 */
+            u32 sfgtCycles = EMV_CONVERT_SFGT_TO_CARRIER_CYCLES(picc.sfgi);
+            u16 sfgtMilliseconds = emvConvertCarrierCyclesToMilliseconds(sfgtCycles);
+            sleepMilliseconds(sfgtMilliseconds);
+#else
             u32 sfgtCycles = (4096UL + 384) << picc.sfgi;
             u16 sfgtMilliseconds = emvConvertCarrierCyclesToMilliseconds(sfgtCycles);
             sleepMilliseconds(sfgtMilliseconds);
             s_DelayUs(500);//+500us TB105_8 09062013 chenf
+
+            if(gemvcardinfo.cardtype == 1)//TA105_11 - TA105_15
+            {    
+                if(picc.sfgi > 9)
+                {
+                    sys_delay_ms(70);
+                }    
+                if(picc.sfgi == 9)
+                {
+                    sys_delay_ms(1);
+                }    
+            }
+#endif
         }
 
         /* Initialize layer 4. */
@@ -270,6 +307,7 @@ guiDebugFlg = gemvdebugflg.apdudeflg;
         else
             error = EMV_ERR_OK;
         apduret = error;
+//        TRACE("\r\n apdu:%d",error);
 guiDebugFlg = 0;
 
         if (EMV_ERR_OK != error)
@@ -278,6 +316,7 @@ guiDebugFlg = 0;
         /* Card removal. */
         emvDisplayMessage(EMV_M_REMOVE_CARD);
         error = emvRemove(&picc);
+//        TRACE("\r\n remove:%d",error);
         removeret = error;
         if (EMV_ERR_OK != error)
             continue;
@@ -293,7 +332,7 @@ bool_t emvStopRequestReceived()
         emvStopRequestReceivedFlag = FALSE;
         return TRUE;
     }
-	
+
     return FALSE;
 }
 

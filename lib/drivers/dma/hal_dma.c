@@ -35,6 +35,11 @@ void drv_dma_disable(uint8_t chl)
     DMA_DisableRequest(chl);
 }
 
+void drv_dma_clock_disable(void)
+{
+    DMA_DisableClock();
+}
+
 void drv_dma_stop(void)
 {
     DMA_CancelTransfer();

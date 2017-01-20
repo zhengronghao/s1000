@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -13,13 +13,13 @@
  * not be liable for any loss or damage arising from its use.                *
  *****************************************************************************
  */
-
+ 
 /*
  * PROJECT: AS3911 firmware
  * $Revision: $
  * LANGUAGE: ANSI C
  */
-
+ 
 /*! \file as3911.h
  *
  * \author Oliver Regenfelder
@@ -116,26 +116,26 @@
  * Error codes to be used within the application.
  * They are represented by an s8
  */
-#define ERR_NONE   0 /*!< \ingroup errorcodes
-               no error occured */
-#define ERR_NOMEM -1 /*!< \ingroup errorcodes
-               not enough memory to perform the requested
-               operation */
-#define ERR_BUSY  -2 /*!< \ingroup errorcodes
-               device or resource busy */
-#define ERR_IO    -3 /*!< \ingroup errorcodes
-                generic IO error */
-//#define ERR_TIMEOUT -4 /*!< \ingroup errorcodes error due to timeout */
-
-#define ERR_REQUEST -5 /*!< \ingroup errorcodes
-                invalid request or requested
-                function can't be executed at the moment */
-#define ERR_NOMSG -6 /*!< \ingroup errorcodes
-                       No message of desired type */
-#define ERR_PARAMS -7 /*!< \ingroup errorcodes
-                       Parameter error */
-
-#define ERR_LAST_ERROR -32
+//#define ERR_NONE   0 /*!< \ingroup errorcodes
+//               no error occured */
+//#define ERR_NOMEM -1 /*!< \ingroup errorcodes
+//               not enough memory to perform the requested
+//               operation */
+//#define ERR_BUSY  -2 /*!< \ingroup errorcodes
+//               device or resource busy */
+//#define ERR_IO    -3 /*!< \ingroup errorcodes
+//                generic IO error */
+////#define ERR_TIMEOUT -4 /*!< \ingroup errorcodes error due to timeout */
+//
+//#define ERR_REQUEST -5 /*!< \ingroup errorcodes
+//                invalid request or requested
+//                function can't be executed at the moment */
+//#define ERR_NOMSG -6 /*!< \ingroup errorcodes
+//                       No message of desired type */
+//#define ERR_PARAMS -7 /*!< \ingroup errorcodes
+//                       Parameter error */
+//
+//#define ERR_LAST_ERROR -32
 
 
 //as3911 error
@@ -162,9 +162,6 @@
 * GLOBAL MACROS
 ******************************************************************************
 */
-#define AS3911_TYPEB_MODULATION     233
-#define AS3911_TYPEA_RECEIVE        0xD8
-#define AS3911_TYPEB_RECEIVE        0xD8 
 
 /*
 ******************************************************************************

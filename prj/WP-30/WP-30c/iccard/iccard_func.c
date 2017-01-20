@@ -442,7 +442,36 @@ static int icc_GetAtr(uchar *Buff)
 				edc = edc ^ (*Buff);
 			}
 
+#if 0
+            int history_cnt = 0;
+//            int historyflg = 0;
+            if ( T == 0 ) {
+                history_cnt = 0;
+                while ( 1 ) {
+                    icc_RecvByte();
+                    if ( gl_CardInfo.k_IccComErr ) {
+                        if ( gl_CardInfo.k_IccErrTimeOut ) {
+                            //接收历史字节超时完毕
+//                            historyflg = 1;
+                            break;
+                        }else{
+                            return ATR_PARERR;
+                        }
+                    }else{
+                        history_cnt++;
+                    }
+                }
+//                if ( history_cnt != 0 ) {
+//                    return ATR_LENGTHERR;
+//                }
+//                if ( historyflg == 1 ) {
+//                    return ICC_SUCCESS;
+//                }
+            }
+			Lenth = Lenth + x + history_cnt;
+#else
 			Lenth = Lenth + x;
+#endif
 
 			if(T)
 			{  /* 如果为T<>0协议卡片一定有TCK  */

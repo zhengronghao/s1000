@@ -1404,6 +1404,13 @@ void ctrl_init(void)
 #if defined(CFG_SECURITY_CHIP)
     sc_is8u256a_init();
 #endif
+#ifdef CFG_CURRENCY_DETECT
+    hw_currencyDetect_init();
+#endif
+
+#ifdef CFG_RFID_IDCARD 
+    idcard_init();
+#endif
     // 待所有相关外设开启后才允许接收数据处理
     ctc_uart_open();
 

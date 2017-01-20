@@ -9,6 +9,67 @@
 #include "ctc_sys.h"
 #include "ctc_pinpad.h"
 #include "ctc_authent.h"
+#include "ctc_idcard.h"
+
+#ifdef CFG_DMA_QUEUE
+volatile int uart4_dma_head = 0; 
+volatile int uart4_dma_tail = 0;
+unsigned char *uart4_dma_buf = &gwp30SysBuf_c.work[0];
+#define DMA_BUF_LEN  WRK_BUFSIZE_C
+extern int idcard_read(uchar *cmd_buff, uchar num_cmd, void *outbuf,
+                uint *num_outbuf);
+
+void ctc_dmaqueue_init(void)
+{
+    uart4_dma_head = 0;
+    uart4_dma_tail = 0;
+    memset(gwp30SysBuf_c.work, 0, sizeof(gwp30SysBuf_c.work));
+    return ;
+}
+
+int ctc_get_dmaqueue_head(void)
+{
+    return uart4_dma_head; 
+}
+
+int ctc_get_dmaqueue_tail(void)
+{
+    return uart4_dma_tail; 
+}
+
+void ctc_set_dmaqueue_head(int value)
+{
+    uart4_dma_head = value; 
+}
+
+void ctc_set_dmaqueue_tail(int value)
+{
+    uart4_dma_tail = value; 
+}
+
+int ctc_uart_dmaqueue_check(void)
+{
+    int data_vail_len = 0;
+    uart4_dma_head = drv_dma_get_daddr(UART4_DMA_CHANNEL) - (uint32)&uart4_dma_buf[0];
+    data_vail_len =  (uart4_dma_head + (DMA_BUF_LEN) - uart4_dma_tail) % (DMA_BUF_LEN);
+    return data_vail_len;
+}
+
+int ctc_frame_dmaqueue_check(uint8_t *data, uint32_t size,unsigned char* temp,int *s_pos, int *e_pos)
+{
+    if(uart4_dma_tail + size > DMA_BUF_LEN)
+    {
+       memcpy(temp,data,DMA_BUF_LEN - uart4_dma_tail);
+       memcpy(temp + DMA_BUF_LEN - uart4_dma_tail,uart4_dma_buf,size - (DMA_BUF_LEN - uart4_dma_tail));
+    }
+    else
+    {
+       memcpy(temp,data,size);
+    }
+    return frame_integrity_check(temp, size,  s_pos, e_pos);
+}
+#endif
+
 
 uint32_t ctc_send_frame(MCUPCK res, uint8_t *data) 
 {
@@ -22,6 +83,7 @@ uint32_t ctc_send_frame(MCUPCK res, uint8_t *data)
     packCmd(res, data, outbuf, &outlen);
 //    hal_uart_write(BD_COMM_INSTANCE, outbuf, outlen);
     TRACE_BUF("ctc_send_frame\r\n", outbuf, outlen);
+//    TRACE("\r\nsend cmd:%02X%02X, sno:%02X%02X", outbuf[5],outbuf[6],outbuf[7],outbuf[8]);
     drv_uart_write(CTC_COMPORT, outbuf, outlen);
 
     return RET_OK;
@@ -102,7 +164,7 @@ void ctc_magcard_operate(MCUPCK res, uint8_t *outbuf)
                 ctc_send_frame(res, data_temp);
                 break;
         case CMD_MAGCARD_REPORT:
-
+                TRACE("\r\nreceive the mag respond:%d,%d\r\n", res.sno1, res.sno2);
                 break;
         default :
                 respose = CMDST_CMD_ER;
@@ -772,36 +834,46 @@ void ctc_pinpad_operate(MCUPCK res, uint8_t *data, uint32_t len)
         break;
 
     case CMD_PED_GET_PINSTR :
+        // 主流程中接收到此指令，说明异常，发送通知中间键关闭窗口
 //        respose = iccard_card_check(data[0],&rev_len,&buffer[2]);
-        buffer[0] = (uint8_t)respose & 0xFF;
-        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
-        res.len = MIN_CMD_RESPONSE + rev_len;
-        ctc_send_frame(res, buffer);             
-        break;
+//        buffer[0] = (uint8_t)respose & 0xFF;
+//        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+//        res.len = MIN_CMD_RESPONSE + rev_len;
+//        ctc_send_frame(res, buffer);             
+//        break;
 
     case CMD_PED_NOTIFY_KEY :
+        // 主流程中接收到此指令，说明异常，发送通知中间键关闭窗口
 //        respose = iccard_card_check(data[0],&rev_len,&buffer[2]);
-        buffer[0] = (uint8_t)respose & 0xFF;
-        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
-        res.len = MIN_CMD_RESPONSE + rev_len;
-        ctc_send_frame(res, buffer);             
-        break;
+//        buffer[0] = (uint8_t)respose & 0xFF;
+//        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+//        res.len = MIN_CMD_RESPONSE + rev_len;
+//        ctc_send_frame(res, buffer);             
+//        break;
 
     case CMD_PED_DIS_KEYNUM :
+        // 主流程中接收到此指令，说明异常，发送通知中间键关闭窗口
 //        respose = iccard_card_check(data[0],&rev_len,&buffer[2]);
-        buffer[0] = (uint8_t)respose & 0xFF;
-        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
-        res.len = MIN_CMD_RESPONSE + rev_len;
-        ctc_send_frame(res, buffer);             
+//        buffer[0] = (uint8_t)respose & 0xFF;
+//        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+//        res.len = MIN_CMD_RESPONSE + rev_len;
+//        ctc_send_frame(res, buffer);             
+        res.cmdop = CMD_PED_PINSTR_END;
+        res.sno1 = 0x00;
+        res.sno2 = 0x01;
+        buffer[0] = 0x03;
+        res.len = MIN_CMD_RESPONSE - 1;
+        ctc_send_frame(res, buffer);
         break;
         
     case CMD_PED_PINSTR_END :
+        // 主流程中接收到此指令，说明异常，发送通知中间键关闭窗口
 //        respose = iccard_card_check(data[0],&rev_len,&buffer[2]);
-        buffer[0] = (uint8_t)respose & 0xFF;
-        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
-        res.len = MIN_CMD_RESPONSE + rev_len;
-        ctc_send_frame(res, buffer);             
-        break;
+//        buffer[0] = (uint8_t)respose & 0xFF;
+//        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+//        res.len = MIN_CMD_RESPONSE + rev_len;
+//        ctc_send_frame(res, buffer);             
+            break;
 
     case CMD_PED_EXTERN :
         respose = ctc_pinpad_extern_main(len, data,&rev_len,&buffer[2]);
@@ -810,9 +882,6 @@ void ctc_pinpad_operate(MCUPCK res, uint8_t *data, uint32_t len)
         res.len = MIN_CMD_RESPONSE + rev_len;
         ctc_send_frame(res, buffer);             
         break;
-//    case CMD_PED_NOTIFY_KEY:
-//    case CMD_PED_DIS_KEYNUM:
-//    case CMD_PED_PINSTR_END:
     case CMD_PED_ONLINEPINSTR_RESULT:
     case CMD_PED_OFFLINEPINSTR_RESULT:
         break;
@@ -1471,6 +1540,7 @@ void ctc_sys_manage_operate(MCUPCK res, uint8_t *data,  uint32_t len)
         ctc_send_frame(res, buffer);
         break;
 
+#ifdef CFG_LOWPWR
    case CMD_SYS_MANAGE_LOWPOWER:
         respose = sys_entry_lowpower(data);
         buffer[0] = 0x00;
@@ -1480,7 +1550,7 @@ void ctc_sys_manage_operate(MCUPCK res, uint8_t *data,  uint32_t len)
         res.len = MIN_CMD_RESPONSE + 2;
         ctc_send_frame(res, buffer);
         break;
-
+#endif
    case CMD_SYS_MANAGE_STATE_CHANGE:
         break; 
    
@@ -1495,6 +1565,7 @@ void ctc_sys_manage_operate(MCUPCK res, uint8_t *data,  uint32_t len)
     }
 }
 
+extern SYSTTEM_TYPE_DEF gSystem;
 void ctc_terminal_info_operate(MCUPCK res, uint8_t *data,  uint32_t len)
 {
    // uint8_t ret = 0;
@@ -1521,7 +1592,19 @@ void ctc_terminal_info_operate(MCUPCK res, uint8_t *data,  uint32_t len)
         res.len = MIN_CMD_RESPONSE + rev_len;
         ctc_send_frame(res, buffer);
         break;
-    
+    case CMD_TERMINAL_INFO_GETANDROID_VER:
+        break;
+    case CMD_TERMINAL_INFO_PM:
+        // 设置通知启用心跳包机制进入低功耗模式
+#ifdef CFG_LOWPWR
+        gSystem.lpwr.bm.enable = 1;
+#endif
+        respose = 0;
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
     default :
         respose = CMDST_CMD_ER;
         data_temp[0] = (uint8_t)respose & 0xFF;
@@ -1577,6 +1660,48 @@ void ctc_scaner_report(int type, uint8_t *data , int len)
     } 
 }
 
+#ifdef CFG_CURRENCY_DETECT
+void ctc_currencyDetect_operate(MCUPCK res, uint8_t *data,  uint32_t len)
+{
+// uint8_t ret = 0;
+    uint16_t respose;
+    uint8_t data_temp[2];
+    unsigned int rev_len = 0;
+ //   unsigned int sed_len = 0;
+    uint8_t buffer[1024];
+  //  uint32_t data_len;
+
+    switch (res.cmdop) {
+    case CMD_CURRENCYDETE_OPEN:
+        hw_currencyDetect_open();
+        respose = 0;
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+
+    case CMD_CURRENCYDETE_CLOSE:
+        hw_currencyDetect_close();
+        respose = 0;
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+    
+    default :
+        respose = CMDST_CMD_ER;
+        data_temp[0] = (uint8_t)respose & 0xFF;
+        data_temp[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE;
+        ctc_send_frame(res, data_temp);
+        break;
+
+    }
+}
+#endif
+
 extern uint Fac_SRAM(uint mode);
 void ctc_fac_operate(MCUPCK res, uint8_t *data, uint32_t len) 
 {
@@ -1613,6 +1738,12 @@ void ctc_fac_operate(MCUPCK res, uint8_t *data, uint32_t len)
         sendbuf[1] = (uint8_t)(respose >> 8) & 0xFF;
         res.len = MIN_CMD_RESPONSE+1;
         ctc_send_frame(res, sendbuf);                   
+        break;
+    case  CMD_FAC_TEST_UART:
+#ifdef CFG_LOWPWR
+        gSystem.lpwr.bm.enable = 1;
+#endif
+        TRACE("heartbeat\r\n");
         break;
     default :
         break;
@@ -1786,6 +1917,99 @@ void ctc_uart_expand_operate(MCUPCK res, uint8_t *data,  uint32_t len)
     }
 }
 
+#ifdef CFG_RFID_IDCARD
+void ctc_idcard_operate(MCUPCK res, uint8_t *data,  uint32_t len)
+{
+    uint16_t respose;
+    unsigned int rev_len =0;
+    uint8_t buffer[2*1024]= {0};
+    char cmd[] = {5,0,0};
+    switch (res.cmdop) {
+
+//    case CMD_IDCARD_OPEN :
+//        respose = ctc_idcard_open((char *)buffer+2);
+//        buffer[0] = (uint8_t)respose & 0xFF;
+//        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+//        res.len = MIN_CMD_RESPONSE;
+//        ctc_send_frame(res, buffer);
+    case CMD_IDCARD_OPEN :
+//        mode = data[0]|data[1]<<8|data[2]<<16|data[3]<<24;
+  //      respose = idcard_open();
+        respose = ctc_idcard_open((void*)buffer);
+        
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE;
+        ctc_send_frame(res, buffer);
+        break;
+
+    case CMD_IDCARD_CLOSE :
+        respose = ctc_idard_close();
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE;
+        ctc_send_frame(res, buffer);
+        break;
+
+    case CMD_IDCARD_SEARCH:
+        memset(buffer, 0, DIM(buffer));
+        respose = ctc_idcard_poll((char *)buffer+2, &rev_len);
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+
+    case CMD_IDCARD_ACTIVE:
+        memset(buffer, 0, DIM(buffer));
+        respose = ctc_idcard_active((char *)buffer+2, &rev_len);
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+    case CMD_IDCARD_READ_WORD_PHOTO:
+        //i = 1;
+        memset(buffer, 0, DIM(buffer));
+        respose = ctc_idcard_read((char *)buffer+2, &rev_len);
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+
+    case CMD_IDCARD_FINGER_PRINT:
+        break;
+
+    case CMD_IDCARD_APDU_GETTHROUTH :
+//        sed_len = len;
+        if (!memcmp(cmd, data, 3)) {
+            if (3 == len) {
+    //        rfid_ResetField(null);
+         	EI_paypass_vResetPICC();
+            TRACE("\r\nRESET IDCARD\r\n");
+            }
+        }
+	//	TRACE("RESET IDCARD");
+        //                respose = rfcard_exchange_apdu(sed_len, data+0, &rev_len, buffer+2);
+        respose = idcard_read(data, len, buffer+2, &rev_len);
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE + rev_len;
+        ctc_send_frame(res, buffer);
+        break;
+
+    default :
+        respose = CMDST_CMD_ER;
+        buffer[0] = (uint8_t)respose & 0xFF;
+        buffer[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.len = MIN_CMD_RESPONSE;
+        ctc_send_frame(res, buffer);
+        break;
+    }
+}
+#endif
+
 #ifdef DEBUG_Dx
 uint8_t ctc_recev_frame_debug(uint8_t* buff, uint32_t cmd_len)
 {
@@ -1856,11 +2080,19 @@ uint8_t ctc_recev_frame_debug(uint8_t* buff, uint32_t cmd_len)
                 ctc_scaner_operate(res, outbuf, outlen);
 #endif
                 break;
-
+        case CMD_CURRENCYDETE :
+#ifdef CFG_CURRENCY_DETECT 
+                ctc_currencyDetect_operate(res, outbuf, outlen);
+#endif
+                break;
+        case CMD_IDCARD :
+#ifdef CFG_RFID_IDCARD
+                ctc_idcard_operate(res, outbuf, outlen);
+#endif
+                break;
 //        case CMD_QRCODE:
 //                ctc_qrcode_operate(res, outbuf, outlen);
 //                break;
-
         case CMD_UART_EXP:
                 ctc_uart_expand_operate(res, outbuf, outlen);
                 break;
@@ -1888,6 +2120,8 @@ uint8_t ctc_recev_frame(uint8_t mode, uint8_t *cmd, uint32_t cmd_len)
         respose = CMDST_DATA_LEN_ER;
         data_temp[0] = (uint8_t)respose & 0xFF;
         data_temp[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.cmdcls = cmd[5];
+        res.cmdop = cmd[6];
         res.len = MIN_CMD_RESPONSE;
         ctc_send_frame(res, data_temp);
         goto RET;
@@ -1896,6 +2130,8 @@ uint8_t ctc_recev_frame(uint8_t mode, uint8_t *cmd, uint32_t cmd_len)
         respose = CMDST_LRC_ER;
         data_temp[0] = (uint8_t)respose & 0xFF;
         data_temp[1] = (uint8_t)(respose >> 8) & 0xFF;
+        res.cmdcls = cmd[5];
+        res.cmdop = cmd[6];
         res.len = MIN_CMD_RESPONSE;
         ctc_send_frame(res, data_temp); 
         goto RET;
@@ -1951,6 +2187,16 @@ uint8_t ctc_recev_frame(uint8_t mode, uint8_t *cmd, uint32_t cmd_len)
         case CMD_SCAN :
 #ifdef CFG_SCANER
                 ctc_scaner_operate(res, outbuf, outlen);
+#endif
+                break;
+        case CMD_CURRENCYDETE :
+#ifdef CFG_CURRENCY_DETECT 
+                ctc_currencyDetect_operate(res, outbuf, outlen);
+                break;
+#endif
+        case CMD_IDCARD :
+#ifdef CFG_RFID_IDCARD
+                ctc_idcard_operate(res, outbuf, outlen);
 #endif
                 break;
 

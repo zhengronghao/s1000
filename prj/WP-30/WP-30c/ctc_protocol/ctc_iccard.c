@@ -401,7 +401,7 @@ uint16_t iccard_card_check(uint8_t slot,uint32_t *len,uint8_t *buffer)
         *buffer = 0;
         if(ret == -ICC_CARDOUT)
         {
-            return CMDST_OTHER_ER;
+            return CMDST_IC_EXIST_ER;
         }
     }
     return CMDST_PARAM_ER;

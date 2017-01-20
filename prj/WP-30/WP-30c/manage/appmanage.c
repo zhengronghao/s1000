@@ -162,6 +162,7 @@ uint32_t s_gapk_replace_sha(uint32_t len)
     // 成功后写入标志
     //        savenum += optnum;
     savenum = shalen/32;
+    TRACE("\ngpkg savenum:%d\n", savenum);
     return s_sysinfo_gpakshainfo(1, &savenum);
 }
 /*Descript:通过读取flash页,是否需要插入或删除的sha在读取的flash页中

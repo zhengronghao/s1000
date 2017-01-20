@@ -1692,8 +1692,8 @@ int test_scan(void)
 //        case 11:
 //            com_em1395_close();
 //            break;
-//        case 99:
-//            return 0;
+        case 99:
+            return 0;
         default:
             break;
         }
@@ -1742,6 +1742,138 @@ int test_sn_id (int mode)
     }
     return ret;
 }		/* -----  end of function test_sn_id  ----- */
+
+
+#ifdef CFG_CURRENCY_DETECT
+int currencyDetect_test(void)
+{
+    int key;
+    hw_currencyDetect_init();
+    while (1)
+    {
+        TRACE("\r\n-|*****************currencyDetect***************|-");
+        TRACE("\r\n-|1-open 2-close                                |-");
+        TRACE("\r\n-|**********************************************|-\t");
+        key = InkeyCount(0);
+        switch (key)
+        {
+        case 1:
+            hw_currencyDetect_open();
+            break;
+        case 2:
+            hw_currencyDetect_close();
+            break;
+        case 99:
+            return 0;
+        default:
+            break;
+        }
+    }
+}
+#endif
+
+#ifdef CFG_RFID_IDCARD
+extern uint16_t ctc_idcard_open(char *output);   
+extern uint16_t ctc_idard_close(void);
+extern uint16_t ctc_idcard_poll(char *output, uint *datalen);
+extern uint16_t ctc_idcard_active(char *output, uint *datalen);
+extern uint16_t ctc_idcard_read(char *output, uint *datalen);
+
+int idcard_test(void)
+{
+    uint32_t key;
+    uint datalen=0;
+    int ret;
+    uchar output[1500];
+    while(1){
+        datalen = 0;
+        TRACE("\r\n-|************************idcard************************|-");
+        TRACE("\r\n-|1.idcard_open 2-idcard_close 3-idcard_search. 4.idcard_read_info 5.idcard_active-");
+        TRACE("\r\n-|******************************************************|-");
+        key = InkeyCount(0);
+#if 0
+        idcard_control(key, output, &datalen);
+#else 
+        switch (key){
+        case 1:
+            ret = ctc_idcard_open((char *)output);
+            if(ret){
+                DISPPOS(ret);
+                // return ret;
+            }
+            break;
+        case 2:
+            datalen = 0;
+            ret = ctc_idard_close();
+            //return ret;
+            if(ret){
+                DISPPOS(ret);
+                // return ret;
+            }
+            break;
+        case 3:
+            ret = ctc_idcard_poll((char *)output, &datalen);
+            if(ret){
+                DISPPOS(ret);
+            }
+            break;
+        case 4:
+            ret = ctc_idcard_read((char *)output, &datalen);
+            if(ret){
+                DISPPOS(ret);
+                // return ret;
+            }
+            break;
+        case 5:
+            ret = ctc_idcard_active((char *)output, &datalen);
+            if(ret){
+                DISPPOS(ret);
+            }
+            break;
+        default:    
+            return 0;
+            break;
+        }
+        if(datalen){
+            sys_beep();
+            TRACE("data len is %d \r\n",datalen);   
+            sys_beep();
+//            TRACE("\r\n------ ------------------------------\r\n");
+            TRACE_BUF("id info", output, datalen);
+//            for(i = 0; i < datalen; i++){
+//                TRACE("%2X  ",(int)*(output+i) );
+//            }
+//            TRACE("\r\n-------------------------------------\r\n");
+        }
+#endif
+    }
+}
+#endif
+
+void test_lowpower(void)
+{
+    int key;
+    TRACE("\ntest lowpower");
+    while (1)
+    {
+        TRACE("\n-|1-enter lowpower 2-exit lowpower");
+        key = InkeyCount(0);
+        switch (key)
+        {
+        case 1:
+            enter_lowerpower_freq();
+            break;
+        case 2:
+            exit_lowerpower_freq();
+            break;
+        case 99:
+            return ;
+        default:
+            break;
+        }
+    }
+}
+
 extern int ped_get_rand(uint32_t inlen,uint8_t *input,uint16_t *outlen,uint8_t *output);
 extern uint8_t ctc_recev_frame_debug(uint8_t* buff, uint32_t cmd_len);
 extern void dbg_tprint(void);
@@ -1787,7 +1919,8 @@ void dbg_s1000_ctrl(void)
         TRACE("\r\n-|25-buzzer 26-proto 27-font 28-bt 29-rfid 30-dlboot    |-");
         TRACE("\r\n-|31-version 32-console 33-pinpad 34-gpio 36-uartdma    |-");
         TRACE("\r\n-|37-key_new 38-get_rand 39-gothrouth_rec 40-fac_log    |-");
-        TRACE("\r\n-|41-IC卡解锁 42-权限包 43-写SN/主板ID 50-libapi     |-");
+        TRACE("\r\n-|41-IC卡解锁 42-权限包 43-写SN/主板ID 50-libapi        |-");
+        TRACE("\r\n-|51-yanchao 52-idcard 53-fingerprint 54-lowpower       |-");
         TRACE("\r\n-|66-localdl 67-scan 80-reset_ini 81-reset_hard 88-reset|-");
         TRACE("\r\n-|82-get_boot_ver 83-dryice status 84-crc16             |-");
         TRACE("\r\n-|******************************************************|-\t");
@@ -2014,6 +2147,20 @@ void dbg_s1000_ctrl(void)
             dbg_libapi_main();
             break;
 #endif
+        case 51:
+#ifdef CFG_CURRENCY_DETECT
+            currencyDetect_test();
+#endif
+            break;
+        case 52:
+#ifdef CFG_RFID_IDCARD
+            idcard_test();
+#endif
+            break;
+        case 54:
+            test_lowpower();
+            break;
+
         case 66:
             dl_process(0);
             break;

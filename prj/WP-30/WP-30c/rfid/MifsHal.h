@@ -20,6 +20,7 @@
                          全局函数原型
                           
 ***********************************************************************/
+#define AS3911_IRQMODE  1
 //#define SPI_RFID        SPI_ID_1            //spi0总线
 #define SPIBUS0_RFID    0
 

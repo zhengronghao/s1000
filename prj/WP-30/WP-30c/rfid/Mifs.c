@@ -19,25 +19,25 @@
 const ulong EG_tulMaxLenList[16] =
 	{ 16, 24, 32, 40, 48, 64, 96, 128, 256, 16, 16, 16, 16, 16, 16, 16 };
 
-const s_rfidpara_info rfidpara_rc531[4] =
-{{0,0x09}, {1,0x0B}, {2,0x34}, {3,0x3F}};
-
-//寄存器27h
-const s_rfidpara_info rfidpara_FM17550_V1[4] =
-{{0,0x82}, {1,0x82}, {2,0x82}, {3,0x82}};
-//寄存器28h
-const s_rfidpara_info rfidpara_FM17550_V1EX[4] =
-{{0,0x38}, {1,0x38}, {2,0x38}, {3,0x38}};
-
-#ifdef PRODUCT_F12
-const s_rfidpara_info rfidpara_as3911[4] =
-{{0,0xE2}, {1,0xCF}, {2,0xC0}, {3,0x00}};
-#else
-const s_rfidpara_info rfidpara_as3911[4] =
-//{{0,0x8F}, {1,0x80}, {2,0x6F}, {3,0x00}};
-//{{0,0xA0}, {1,0x90}, {2,0x80}, {3,0x70}};
-{{0,0xE0}, {1,0xDE}, {2,0xA0}, {3,0x90}};
-#endif
+//const s_rfidpara_info rfidpara_rc531[4] =
+//{{0,0x09}, {1,0x0B}, {2,0x34}, {3,0x3F}};
+//
+////寄存器27h
+//const s_rfidpara_info rfidpara_FM17550_V1[4] =
+//{{0,0x82}, {1,0x82}, {2,0x82}, {3,0x82}};
+////寄存器28h
+//const s_rfidpara_info rfidpara_FM17550_V1EX[4] =
+//{{0,0x38}, {1,0x38}, {2,0x38}, {3,0x38}};
+//
+//#ifdef PRODUCT_F12
+//const s_rfidpara_info rfidpara_as3911[4] =
+//{{0,0xE2}, {1,0xCF}, {2,0xC0}, {3,0x00}};
+//#else
+//const s_rfidpara_info rfidpara_as3911[4] =
+////{{0,0x8F}, {1,0x80}, {2,0x6F}, {3,0x00}};
+////{{0,0xA0}, {1,0x90}, {2,0x80}, {3,0x70}};
+//{{0,0xE0}, {1,0xDE}, {2,0xA0}, {3,0x90}};
+//#endif
 
 #define RFID_READY(x) {if(!x) return (-RFID_NODEVICE);}
 /**********************************************************************
@@ -58,6 +58,8 @@ uchar EI_mifs_ucSendRBlock(uchar ucType, uchar ucCID, uint * puiRecLen);
 uchar EI_mifs_ucHandleATQA(uint uiLength);
 uchar EI_mifs_ucHandleATQB(uint uiLength);
 uchar EI_mifs_ucAuthentication(uchar ucKeyType, uchar ucSecNr);
+extern int s_rfid_getPara(int module, int para, int index, s_rfidpara_info *rfdata);
+int if_rfid_module(void);
 /**********************************************************************
 
                           API函数定义
@@ -102,6 +104,10 @@ uchar EA_ucMifsOpen(uchar ucOpenMode)
 //		EI_paypass_vSelectType(ucOpenMode);
 //        return EM_SUCCESS;
 //    }
+    if ( if_rfid_module() ) {
+        //没有射频模块
+        return 1;
+    }
     s_rfid_init();
 
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
@@ -136,10 +142,10 @@ uchar EA_ucMifsOpen(uchar ucOpenMode)
 //        as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, 0x00); //根据硬件调节0x9F
         as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, gtRfidDebugInfo.CW_A); //根据参数区获取
 
-        as3911WriteRegister(AS3911_REG_ANT_CAL_CONF, 0x80); //0x21 设置最大
+        as3911WriteRegister(AS3911_REG_ANT_CAL_CONTROL, 0x80); //0x21 设置最大
         as3911ModifyRegister(AS3911_REG_RX_CONF3, 0xE0, 0xC0);
-        gtRfidProInfo.gTypeArec = 0xD8;
-        gtRfidProInfo.gTypeBrec = 0xD8;
+        gas3911Reg.gTypeArec = 0xD8;
+        gas3911Reg.gTypeBrec = 0xD8;
 
 //        as3911ModifyRegister(AS3911_REG_RX_CONF3, 0xE0, 0xE0);//针对C测试机 将接收调节最大
 //        as3911WriteRegister(AS3911_REG_RX_CONF1, 0x40); //修改0AH bit6 针对C测试机
@@ -147,7 +153,7 @@ uchar EA_ucMifsOpen(uchar ucOpenMode)
 //        s_as3911_SetInt(ON);
 
         //type b 调制深度自适应
-        as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x7E, 0x1E);
+        as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x7E, 0x1E);
         as3911ClearInterrupts(AS3911_IRQ_MASK_DCT);
         as3911EnableInterrupts(AS3911_IRQ_MASK_DCT);
         as3911ExecuteCommand(AS3911_CMD_CALIBRATE_MODULATION);
@@ -157,10 +163,8 @@ uchar EA_ucMifsOpen(uchar ucOpenMode)
         if ( timer0 == AS3911_IRQ_MASK_DCT) {
             EG_mifs_tWorkInfo.ucFirstOpenFlag = 1;
             if ( s_rfid_mainVersion(0) == 1 ) {
-                as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x80);//固定type b调制深度
-                as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, AS3911_TYPEB_MODULATION);
-                gtRfidProInfo.gTypeArec = AS3911_TYPEA_RECEIVE;
-                gtRfidProInfo.gTypeBrec = AS3911_TYPEB_RECEIVE;
+                as3911WriteRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x80);//固定type b调制深度
+                as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, gas3911Reg.gTypeBmodule);
             }
             if ( ucOpenMode ==  EM_mifs_NULL ) {
                 //关闭载波
@@ -828,6 +832,7 @@ uchar EA_ucMIFAntiColl(DevHandle hDevHandle, ulong * pulSnr)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        select = select;getcol = getcol;
         ucTempData = 0;
         ucTempData = ucTempData;
         ucCMD = EMV_HAL_TRANSCEIVE_WITHOUT_CRC;
@@ -2049,7 +2054,7 @@ ushort s_rfid_CrcAB(uchar Crctype, uchar *Data, int Sum, ushort* wCrc)
 ***********************************************************************/
 uchar EA_ucMIFRead(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
 {
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar ucResult;
 	uchar ucCMD = 0;
 
@@ -2080,6 +2085,7 @@ uchar EA_ucMIFRead(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
         u16 usCrc = 0;
@@ -2231,7 +2237,7 @@ uchar EA_ucMIFRead(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
 ***********************************************************************/
 uchar EA_ucMIFWrite(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
 {
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar ucResult;
 	uchar ucCMD = 0;
 	uint time = 0;
@@ -2263,6 +2269,7 @@ uchar EA_ucMIFWrite(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
 
@@ -2447,7 +2454,7 @@ uchar EA_ucMIFWrite(DevHandle hDevHandle, uchar ucAddr, uchar * pucData)
 uchar EA_ucMIFIncrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
 {
 	uchar ucResult;
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar i;
 	uchar ucCMD = 0;
 	uint time = 0;
@@ -2476,6 +2483,7 @@ uchar EA_ucMIFIncrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
 
@@ -2667,7 +2675,7 @@ uchar EA_ucMIFIncrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
 uchar EA_ucMIFDecrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
 {
 	uchar ucResult;
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar i = 0;
 	uchar ucCMD = 0;
 	uint time = 0;
@@ -2696,6 +2704,7 @@ uchar EA_ucMIFDecrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
 
@@ -2886,7 +2895,7 @@ uchar EA_ucMIFDecrement(DevHandle hDevHandle, uchar ucAddr, ulong ulValue)
 uchar EA_ucMIFRestore(DevHandle hDevHandle, uchar ucAddr)
 {
 	uchar ucResult;
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar i = 0;
 	uchar ucCMD = 0;
 	uint time = 0;
@@ -2915,6 +2924,7 @@ uchar EA_ucMIFRestore(DevHandle hDevHandle, uchar ucAddr)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
 
@@ -3104,7 +3114,7 @@ uchar EA_ucMIFRestore(DevHandle hDevHandle, uchar ucAddr)
 ***********************************************************************/
 uchar EA_ucMIFTransfer(DevHandle hDevHandle, uchar ucAddr)
 {
-    uchar ucTempData;
+    uchar ucTempData = 0;
 	uchar ucResult;
 	uchar ucCMD = 0;
 
@@ -3132,6 +3142,7 @@ uchar EA_ucMIFTransfer(DevHandle hDevHandle, uchar ucAddr)
     if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 
 #ifdef EM_AS3911_Module
+        ucTempData = ucTempData;
 
         u16 miflen = 0;
 
@@ -7010,37 +7021,6 @@ int rfid_ResetField(int para)
     return 0;
 }
 
-//获取射频参数
-int s_rfid_getPara(int module, int para, int index, s_rfidpara_info *rfdata)
-{
-	int ret = ERROR;
-	int i;
-    s_rfidpara_info *ptr;
-
-    if ( module ==  RFID_Module_RC531) {
-        ptr = (s_rfidpara_info *)rfidpara_rc531;
-    }else if ( module == RFID_Module_AS3911 ) {
-        ptr = (s_rfidpara_info *)rfidpara_as3911;
-    }else if ( module == RFID_Module_PN512 ) {
-        ptr = (s_rfidpara_info *)rfidpara_FM17550_V1;
-    }else
-        return ret;
-
-//    Dprintk("\r\n module:%x para:%d index:%d",module,para,index);
-    if ( para == RFID_PARA_PWR) {
-        for ( i = 0 ; i < DIM(rfidpara_as3911) ; i++ ) {
-            if ( ptr[i].index == index ) {
-                *rfdata = ptr[i];
-//                Dprintk("\r\n index:%d  pwr:%x",rfdata->index,rfdata->pwrfield);
-                return OK;
-            }
-        }
-    }
-
-//    Dprintk("\r\n error module:%x para:%d index:%d",module,para,index);
-    *rfdata = ptr[0];//出错 默认值
-	return ret;
-}
 //调节射频参数 para-调整参数  value -调整参数
 int rfid_ParaAdjust(int para, int value)
 {
@@ -7070,10 +7050,12 @@ int rfid_ParaAdjust(int para, int value)
             gtRfidDebugInfo.CW_B = gtRfidDebugInfo.CW_A;
             if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
 #ifdef EM_AS3911_Module  //AS3911
+                gas3911Reg.gTypeBmodule = (uchar)rfdata.regpara;
                 as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, gtRfidDebugInfo.CW_A); //根据硬件调节0x9F
+                as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, gas3911Reg.gTypeBmodule);
                 if ( s_rfid_mainVersion(0) == 0 ) {
                     //wp70v1.00是自动调整type b深度
-                    as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x7E, 0x1E);
+                    as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONTROL, 0x7E, 0x1E);
                     as3911ClearInterrupts(AS3911_IRQ_MASK_DCT);
                     as3911EnableInterrupts(AS3911_IRQ_MASK_DCT);
                     as3911ExecuteCommand(AS3911_CMD_CALIBRATE_MODULATION);
@@ -7086,14 +7068,22 @@ int rfid_ParaAdjust(int para, int value)
             }
             if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_PN512 ) {
 #ifdef EM_PN512_Module  //PN512
-                gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
-                gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[value].pwrfield;
+//                gcMifReg.GsNOn = (uchar)rfdata.pwrfield;
+//                gcMifReg.CWGsP = (uchar)rfidpara_FM17550_V1EX[value].pwrfield;
+                gcMifReg.CWGsP = (uchar)rfdata.pwrfield;
 //                EI_mifs_vWriteReg(1, RFCfgReg, &gcMifReg.RFCfg);
 #endif
             }
             ret = RFID_SUCCESS;
         }else
             ret = -RFID_ERRPARAM;
+    }else if ( para == RFID_PARA_TYPEBMODULE) {
+#ifdef EM_AS3911_Module  //AS3911
+        if ( EG_mifs_tWorkInfo.RFIDModule == RFID_Module_AS3911 ) {
+            as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, value);
+            gas3911Reg.gTypeBmodule = value;
+        }
+#endif
     }else{
 		ret = -RFID_ERRPARAM;
 	}
@@ -7191,14 +7181,14 @@ int adjust_rfid_PwrField(int mode)
 	int PwrAdback = 0;
     s_rfidpara_info rfdata;
 
-    iRet = iRet;PwrAdback = PwrAdback;
+    iRet = iRet;
 	iRet = ReadRfid_Para_Get(RFID_PARA_PWR, &param);
 	PwrAdback = param;
 	while(1)
 	{
 		lcd_cls();
 		lcdDispMultiLang(0, DISP_FONT_LINE0, DISP_FONT|DISP_CLRLINE|DISP_INVLINE|DISP_MEDIACY, "场强设置", "Field Level Set");
-		lcdDispMultiLang(0, DISP_FONT_LINE1, DISP_FONT|DISP_CLRLINE, "当前场强等级:%d(0x%02X)", "Field Level:%d(0x%02X)",param,gtRfidDebugInfo.CW_A);
+		lcdDispMultiLang(0, DISP_FONT_LINE1, DISP_FONT|DISP_CLRLINE, "当前场强等级:%d(0x%02X)", "Field Level:%d(0x%02X)",PwrAdback,gtRfidDebugInfo.CW_A);
 		lcdDispMultiLang(0, DISP_FONT_LINE2, DISP_FONT|DISP_CLRLINE, "1-手动设置",  "1-Adjust");
 		lcdDispMultiLang(0, DISP_FONT_LINE3, DISP_FONT|DISP_CLRLINE, "2-恢复默认",  "2-Default");
 		key = kb_getkey(-1);
@@ -7224,6 +7214,7 @@ int adjust_rfid_PwrField(int mode)
                         rfid_ParaAdjust(RFID_PARA_PWR, param);
 						iRet = WriteRfid_Para_Set(RFID_PARA_PWR, param);
 						tmp = 1;
+                        PwrAdback = param;
 						break;
 
 			        case KEY_SYMBOL:
@@ -7254,6 +7245,7 @@ int adjust_rfid_PwrField(int mode)
         		break;
             case  KEY2:
                 param = RFID_DEFAULT_PWR;
+                PwrAdback = param;
                 iRet = rfid_ParaAdjust(RFID_PARA_PWR, param);
     			iRet = WriteRfid_Para_Set(RFID_PARA_PWR, param);
     			break;
@@ -7264,6 +7256,66 @@ int adjust_rfid_PwrField(int mode)
 		}
     }
 //    return 0;
+}
+
+//调整调制深度
+int adjust_rfid_TypeBModule(int mode)
+{
+#ifdef EM_AS3911_Module  //AS3911
+	int key,param;
+    char databuf[16];
+
+    if ( EG_mifs_tWorkInfo.RFIDModule != RFID_Module_AS3911 ) {
+        //其他芯片暂时不支持设置
+        return 0;
+    }
+	ReadRfid_Para_Get(RFID_PARA_TYPEBMODULE, &param);
+	while(1)
+	{
+		lcd_cls();
+		lcdDispMultiLang(0, DISP_FONT_LINE0, DISP_FONT|DISP_CLRLINE|DISP_INVLINE|DISP_MEDIACY, "调制设置", "Module Level Set");
+		lcdDispMultiLang(0, DISP_FONT_LINE1, DISP_FONT|DISP_CLRLINE, "当前调制值:0x%02X %02X", "Module Level:0x%02X %02X",gas3911Reg.gTypeBmodule,param);
+		lcdDispMultiLang(0, DISP_FONT_LINE2, DISP_FONT|DISP_CLRLINE, "1-手动设置",  "1-Adjust");
+		lcdDispMultiLang(0, DISP_FONT_LINE3, DISP_FONT|DISP_CLRLINE, "2-恢复默认",  "2-Default");
+		key = kb_getkey(-1);
+		switch(key)
+		{
+    		case KEY1:
+				lcd_cls();
+                lcdDispMultiLang(0, DISP_FONT_LINE0, DISP_FONT|DISP_CLRLINE|DISP_INVLINE|DISP_MEDIACY,
+                                 "调制设置", "Module Level Set");
+                lcdDispMultiLang(0, DISP_FONT_LINE2, DISP_FONT|DISP_CLRLINE,
+                                 "当前调制值:0x%02X", "Module Level:0x%02X", param);
+                //                    lcdDispMultiLang(0, DISP_FONT_LINE3, DISP_FONT|DISP_CLRLINE|DISP_MEDIACY,
+                //                                     "[\x1E/\x1F]: 调节", "[\x1E/\x1F]: Adjust");
+                lcdDispMultiLang(0, DISP_FONT_LINE4, DISP_FONT|DISP_CLRLINE|DISP_MEDIACY,
+                                 "设置值确认保存", "Set and Save");
+                //					key = kb_getkey(-1);
+                memset(databuf, 0, sizeof(databuf));
+                lcd_goto(0,DISP_FONT_LINE5);
+                key = kb_getstr(KB_SMALL_NUM, 1, 3, -1, (char *)databuf);
+                TRACE("\r\n---key:%x %d",key,key);
+                if ( key == -KB_CANCEL ) {
+                    break;
+                }
+                param = (int)atoi((char const *)databuf);
+                rfid_ParaAdjust(RFID_PARA_TYPEBMODULE, param);
+                WriteRfid_Para_Set(RFID_PARA_TYPEBMODULE, param);
+        		break;
+            case  KEY2:
+                param = AS3911_TYPEB_MODULATION;
+                rfid_ParaAdjust(RFID_PARA_TYPEBMODULE, param);
+    			WriteRfid_Para_Set(RFID_PARA_TYPEBMODULE, param);
+    			break;
+			case KEY_CANCEL:
+				return 0;
+    		default:
+    			break;
+		}
+    }
+#else
+    return 0;
+#endif
 }
 //int rfid_type_menu(int mode)
 //{
@@ -7297,6 +7349,10 @@ int rfid_para2offset(int type, int *offset, int *len)
     case RFID_PARA_CHIP :
         i = FPOS(MODULE_RFID_INFO,type);
         *len = FSIZE(MODULE_RFID_INFO,type);
+        break;
+    case RFID_PARA_TYPEBMODULE :
+        i = FPOS(MODULE_RFID_INFO,gTypeBmodule);
+        *len = FSIZE(MODULE_RFID_INFO,gTypeBmodule);
         break;
     default :
         return -1;

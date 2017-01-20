@@ -22,7 +22,7 @@
 #include "wp30_ctrl.h"
 #include "..\..\..\..\lib\drivers\time\rtc-lib.h"
 
-#define EXFLASH_NUMBER_MAX     128
+#define EXFLASH_NUMBER_MAX     4096     // 4M BYTE 一个扇区4K 
 #define EXFLASH_DATA_LEN_MAX   512
 
 //#define MDF_MASK 0x7F01FC 
@@ -42,7 +42,8 @@
 #define SAFEMANAGE_MODE_AUTHEPAG    0x01       // 权限包模式 
 
 //协议 低功耗
-#define LOWPOWER_DELAYED 2000
+#define LOWPOWER_DELAYED            2000 
+#define LOWPOWER_HEARTBEAT_TIMEOUT  25000 
 
 extern uint32 Lowpower_Timer;
 

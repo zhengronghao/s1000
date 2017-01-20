@@ -73,10 +73,10 @@
 */
 
 /*! ISO14443-A cards polling flag as recommended by the EMV standard. */
-static volatile int emvTypeA;
+static int emvTypeA;
 
 /*! ISO14443-B cards polling flag as recommended by the EMV standard. */
-static volatile int emvTypeB;
+static int emvTypeB;
 
 /*
 ******************************************************************************
@@ -110,11 +110,10 @@ void emvPollSingleIteration()
     emvHalSleepMilliseconds(EMV_T_P);
     if (emvTypeACardPresent())
     {
-        /* ISO14443-A card(s) found. */
-        emvTypeA = 1;
-
         /* Send HLTA command. */
         u8 hltaCommand[2] = { 0x50, 0x00 };
+        /* ISO14443-A card(s) found. */
+        emvTypeA = 1;
         emvHalTransceive(hltaCommand, sizeof(hltaCommand), NULL, 0, NULL, EMV_HLTA_FDT, EMV_HAL_TRANSCEIVE_WITH_CRC);
     }
 
@@ -136,12 +135,17 @@ s16 emvPoll()
     /* Poll as long as no cards are found. */
     while (1)
     {
+        if(kb_hit())//cf20140423
+        {
+            return EMV_ERR_STOPPED;
+        }
         if ( IfInkey(0)) {
-            Dprintk("\r\n\r\n ----poll 99 to exit-------");
-            if ( InkeyCount(0) == 99 ) {
-                /* Received stop request, stop terminal main loop. */
-                return EMV_ERR_STOPPED;
-            }
+//            Dprintk("\r\n\r\n ----poll 99 to exit-------");
+            return EMV_ERR_STOPPED;
+//            if ( InkeyCount(0) == 99 ) {
+//                /* Received stop request, stop terminal main loop. */
+//                return EMV_ERR_STOPPED;
+//            }
         }
 
         if (emvStopRequestReceived())
@@ -153,18 +157,16 @@ s16 emvPoll()
         }
 
         /* Wait for t_p. */
-//        TRACE("\r\n..a");
         emvHalSleepMilliseconds(EMV_T_P);
 
         //guiDebugFlg = 1;
         //guiDebugS3 = 0;
         if (emvTypeACardPresent())
         {
-            /* ISO14443-A card(s) found. */
-            emvTypeA = 1;
-
             /* Send HLTA command. */
             u8 hltaCommand[2] = { 0x50, 0x00 };
+            /* ISO14443-A card(s) found. */
+            emvTypeA = 1;
             //gemvdebugflg.emvproflg0 = 1;
 //            emvHalTransceive(hltaCommand, sizeof(hltaCommand), NULL, 0, NULL, EMV_HLTA_FDT, EMV_HAL_TRANSCEIVE_WITH_CRC);
 //            if ( emvTypeB == 0 ) {
@@ -178,16 +180,11 @@ s16 emvPoll()
 
         if (emvTypeB != 0){
 //            TRACE("\r\n--type b");
-//
-//            TRACE("\r\n11111--type b");
-//            sys_beep();
-//            InkeyCount(0);
             break;
         }
 
 //        SETSIGNAL2_H();
         /* Wait for t_p. */
-//        TRACE("\r\n..b");
         emvHalSleepMilliseconds (EMV_T_P);
 
         if (emvTypeBCardPresent())

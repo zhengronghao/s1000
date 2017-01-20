@@ -11,6 +11,7 @@
 #define LineDot		                               (384)
 #define TP_MAX_HEAT_STROBE                  (1)        
 #define TP_MAX_HEAT_DOT                       (96)    
+#define TP_MAX_HEAT_DOT_64                    (64)    
 #define TpMinWaitTime                              (50)
 //#define HEAT_TIMER                                  BD_TIMER3
 
@@ -22,9 +23,6 @@
 #define TP_MAX_STROBE_STEP                   (4)        
 #endif
 
-#define VOLTAGE_DETECTION_COUNT    120 //电压检测间隔 单位点行
-#define PAPER_OUT_COUNT          5    //缺纸检测间隔 单位点行
-
 #define TP_OK                   0x00
 #define TP_PAPER_READY_MASK                 0x01
 #define TP_PAPER_BLOCK_MASK                 0x02
@@ -35,7 +33,9 @@
 #define TP_HEAD_MASK                              0x40
 #define TP_POWER_OUT_MASK                     0x80
 
-#define  POWRER_LOW_ALARM                     353
+#define  POWRER_LOW_ALARM_LV1                     335
+#define  POWRER_LOW_ALARM_LV2                     360
+
 #define  TEMP_HIGH_ALARM                         63
 
 

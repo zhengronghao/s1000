@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -37,6 +37,7 @@
 */
 
 #include "wp30_ctrl.h"
+#include <limits.h>
 
 #if (defined(EM_AS3911_Module))
 /*
@@ -47,6 +48,8 @@
 
 /*! Sanity timeout for the AS3911 direct command completed interrupt. */
 #define AS3911_DCT_IRQ_SANITY_TIMEOUT   20//5
+
+#define DELTA(A,B) (((A)>(B))?((A)-(B)):((B)-(A)))
 
 /*
 ******************************************************************************
@@ -72,6 +75,27 @@ static AS3911ModulationLevelMode_t as3911ModulationLevelMode = AS3911_MODULATION
 /*! Lookup table for the active modulation level adjustment mode. */
 static const AS3911ModulationLevelTable_t *as3911ModulationLevelTable = NULL;
 static const AS3911ModulationLevelAutomaticAdjustmentData_t *as3911ModulationLevelAutomaticAdjustmentData = NULL;
+
+//#define EMV_AS3911TABLE_TEST
+
+#if defined(EMV_AS3911TABLE_TEST)
+static u16 modLastAmp = SHRT_MAX;
+
+static const u8 lowXs[2] = {0x5e,0x6c};
+static const u8 lowYs[2] = {0xce,0xae};
+
+static const AS3911ModulationLevelTable_t as3911LowModulationLevelTable = 
+{
+    2,
+    (u8*)lowXs,
+    (u8*)lowYs
+};
+
+static struct AS3911OutputLevels outputLevels = { 0, 0, 0, 0 };
+
+static const struct AS3911GainTable * lowGainTable = NULL;
+static const struct AS3911GainTable * normGainTable = NULL;
+#endif
 
 /*
 ******************************************************************************
@@ -120,6 +144,13 @@ int as3911GetInterpolatedValue(int x1, int y1, int x2, int y2, int xi);
 ******************************************************************************
 */
 
+void as3911SetOutputLevels(const struct AS3911OutputLevels *ol)
+{
+#if defined(EMV_AS3911TABLE_TEST)
+    outputLevels = *ol;
+#endif
+}
+
 void as3911SetModulationLevelMode(AS3911ModulationLevelMode_t modulationLevelMode
     , const void *modulationLevelData)
 {
@@ -151,7 +182,8 @@ void as3911GetModulationLevelMode(AS3911ModulationLevelMode_t *modulationLevelMo
 //	else if (AS3911_MODULATION_LEVEL_AUTOMATIC == as3911ModulationLevelMode)
 //	{
 //		modulationLevelData = as3911ModulationLevelAutomaticAdjustmentData;
-//	}
+//	} /* FIXME: this always evaluates to false, no variable is 2 and 3 at the same time */	
+//	  /* use "||" instead? */
 //	else if (  (AS3911_MODULATION_LEVEL_FROM_PHASE == as3911ModulationLevelMode)
 //	        && (AS3911_MODULATION_LEVEL_FROM_AMPLITUDE == as3911ModulationLevelMode))
 //	{
@@ -161,6 +193,199 @@ void as3911GetModulationLevelMode(AS3911ModulationLevelMode_t *modulationLevelMo
 
 void as3911AdjustModulationLevel()
 {
+#if 0
+    u32 irqs = 0;
+    u8 measurementCommand = 0;
+    u8 amplitudePhase = 0;
+    u8 phase = 0;
+    u8 antennaDriverStrength = 0;
+    u8 index = 0;
+    u8 am_off_level;
+    AS3911ModulationLevelTable_t const *p;
+    struct AS3911GainTable const *gt = NULL;
+    int i;
+    u8 j;
+
+    p = as3911ModulationLevelTable;
+    as3911ReadRegister(AS3911_REG_RFO_AM_OFF_LEVEL, &am_off_level);
+    for ( i = 0; i<2 ; i++)
+    {
+        as3911ExecuteCommandAndGetResult(AS3911_CMD_MEASURE_AMPLITUDE, AS3911_REG_AD_RESULT, AS3911_DCT_IRQ_SANITY_TIMEOUT, &amplitudePhase);
+        //emvPrintf("i=%x, am_off_lvl=%x, amp=%x\n",i,am_off_level, amplitudePhase);
+        if (i == 0)
+        {
+            if (outputLevels.lowRed == outputLevels.highRed)
+            {
+                gt = normGainTable;
+                break;
+            }
+            if(outputLevels.highRed == am_off_level)
+            {
+                if(amplitudePhase > outputLevels.decThresh)
+                { /* amplitude is fine, output power and current table are o.k. */
+                    gt = normGainTable;
+                    break;
+                }
+                /* Reduce output power, redo measuremnt, change table */
+                j = outputLevels.highRed;
+                do{
+                    j++;
+                    as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, j);
+                }while (j < outputLevels.lowRed);
+
+                emvPrintf("%x <= %x : reduced AM_OFF_LEVEL\ -> 0x%x\n", amplitudePhase, outputLevels.decThresh,j);
+                modLastAmp = SHRT_MAX; /* Force triggering of automatic mod depth calibration if used */
+                p = &as3911LowModulationLevelTable;
+            }
+            else
+            {
+                if(amplitudePhase < outputLevels.incThresh)
+                { /* Output power was reduced, amplitude is still fine, use low table */
+                    p = &as3911LowModulationLevelTable;
+                    gt = lowGainTable;
+                    break;
+                }
+                /* Output power was reduced, increase again, redo measuremnt, use normal table */
+                j = am_off_level;
+                do{
+                	j--;
+                    as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, j);
+                }while(j>outputLevels.highRed);
+                gt = normGainTable;
+                    
+                emvPrintf("%x >= %x: increased AM_OFF_LEVEL\ -> 0x%x\n",amplitudePhase, outputLevels.incThresh, j);
+                modLastAmp = SHRT_MAX; /* Force triggering of automatic mod depth calibration if used */
+            }
+        }
+    }
+
+    if (gt != NULL)
+    {
+        const struct AS3911GainTableVal *gtv = NULL;
+        i = 0;
+        while (i+1 < gt->num_vals)
+        {
+            if (DELTA(gt->table[i+1].amp,amplitudePhase) > DELTA(gt->table[i].amp,amplitudePhase))
+            { /* If amplitude delta gets bigger, we can break since table is first order sorted by amp */
+                break;
+            }
+            i++;
+        }
+        //emvPrintf("highest index of closest amp: %d\n",i);
+        /* We found now highest index with the closest amplitude.*/
+        /* Now go down to find the one with the closest phase */
+        if ( (i-1 >= 0) && (gt->table[i-1].amp == gt->table[i].amp) )
+        { /* Need to measure phase and find the one with closest phase */
+
+            as3911ExecuteCommandAndGetResult(AS3911_CMD_MEASURE_PHASE, AS3911_REG_AD_RESULT, AS3911_DCT_IRQ_SANITY_TIMEOUT, &phase);
+            while (i-1 >= 0)
+            {
+                if (gt->table[i-1].amp != gt->table[i].amp)
+                { /* Only continue if amp is still the same */
+                    //emvPrintf("break amp not equal %d\n",i);
+                    break;
+                }
+                if (DELTA(gt->table[i-1].phase,phase) > DELTA (gt->table[i].phase, phase))
+                { /* If phase delta gets bigger, we can break since table is second order sorted by phase */
+                    //emvPrintf("break phase delta too low %d\n",i);
+                    break;
+                }
+                i--;
+            }
+        }
+        if (i < gt->num_vals)
+        {
+            gtv = gt->table + i;
+        }
+        if (gtv)
+        {
+            if (gt->used_id != i)
+            {
+                const char *text = "";
+                /* FIXME Remove const, as used_id is solely used for printing in here. Will not work with gain tables in ROM! */
+                ((struct AS3911GainTable*)gt)->used_id = i;
+                if (gt->text != NULL) 
+                {
+                    text = gt->text;
+                }
+                emvPrintf("DGT %s adjusted gains: %02hx %02hx -> %02hx %02hx %02hx %02hx %02hx\n",text , amplitudePhase, phase, gtv->reg02, gtv->regA, gtv->regB, gtv->regC, gtv->regD);
+            }
+            as3911ModifyRegister(AS3911_REG_OP_CONTROL,
+                                 AS3911_REG_OP_CONTROL_rx_man | AS3911_REG_OP_CONTROL_rx_chn,
+                                 gtv->reg02 & 0x30);
+            as3911ContinuousWrite(AS3911_REG_RX_CONF1, (uchar *)&gtv->regA, 4);
+        }
+    }
+
+    /* Done with OFF level, now handle ON level if needed */
+    if (AS3911_MODULATION_LEVEL_FIXED == as3911ModulationLevelMode)
+        return;
+    else if (AS3911_MODULATION_LEVEL_AUTOMATIC == as3911ModulationLevelMode)
+    {
+        as3911ExecuteCommandAndGetResult(AS3911_CMD_MEASURE_AMPLITUDE, AS3911_REG_AD_RESULT, AS3911_DCT_IRQ_SANITY_TIMEOUT, &amplitudePhase);
+        
+        if (abs(((s32)amplitudePhase - (s32)modLastAmp)) > as3911ModulationLevelAutomaticAdjustmentData->hysteresis)
+        {
+
+            modLastAmp = amplitudePhase;
+            as3911ExecuteCommandAndGetResult(AS3911_CMD_CALIBRATE_MODULATION, AS3911_REG_AM_MOD_DEPTH_RESULT, AS3911_DCT_IRQ_SANITY_TIMEOUT, NULL);
+
+//            emvDisplayString("Recalibrated mod depth\n");
+            { /* delay some time after this pulse */
+                int i;
+                for (i = 0; i<1000; i++); // FIXME wild approximation
+            }
+        }
+    }
+    else if (AS3911_MODULATION_LEVEL_FROM_AMPLITUDE == as3911ModulationLevelMode)
+        measurementCommand = AS3911_CMD_MEASURE_AMPLITUDE;
+    else if (AS3911_MODULATION_LEVEL_FROM_PHASE == as3911ModulationLevelMode)
+        measurementCommand = AS3911_CMD_MEASURE_PHASE;
+    else
+    {
+        /* ToDo: enter debug code here. */
+        return;
+    }
+
+    /* Measurement based modulation strength adjustment requires a modulation
+     * level table with at least 2 entries to perform interpolation.
+     */
+    if ((p == NULL) || (p->length < 2))
+    {
+        /* ToDo: enter debug code here. */
+        return;
+    }
+
+    as3911ExecuteCommandAndGetResult(measurementCommand, AS3911_REG_AD_RESULT, AS3911_DCT_IRQ_SANITY_TIMEOUT, &amplitudePhase);
+
+    for (index = 0; index < p->length; index++)
+    {
+        if(amplitudePhase <= p->x[index])
+            break;
+    }
+    /* Use the last interpolation level dataset for any values outside the highest.
+     * x-value from the datasets.
+     */
+    if (index == p->length)
+        index--;
+
+    if (index == 0)
+        antennaDriverStrength = as3911GetInterpolatedValue(
+            p->x[index],
+            p->y[index],
+            p->x[index+1],
+            p->y[index+1],
+            amplitudePhase);
+    else
+        antennaDriverStrength = as3911GetInterpolatedValue(
+            p->x[index-1],
+            p->y[index-1],
+            p->x[index],
+            p->y[index],
+            amplitudePhase);
+
+    as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, antennaDriverStrength);
+#else
     u32 irqs = 0;
     u8 measurementCommand = 0;
     u8 amplitudePhase = 0;
@@ -258,6 +483,15 @@ void as3911AdjustModulationLevel()
 
     D2(DATAIN(antennaDriverStrength));
     as3911WriteRegister(AS3911_REG_RFO_AM_ON_LEVEL, antennaDriverStrength);
+#endif
+}
+
+void as3911SetGainTables(const struct AS3911GainTable *gainTableLow, const struct AS3911GainTable *gainTableNorm)
+{
+#if defined(EMV_AS3911TABLE_TEST)
+    lowGainTable = gainTableLow;
+    normGainTable = gainTableNorm;
+#endif
 }
 
 /*

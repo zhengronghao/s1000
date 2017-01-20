@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -44,6 +44,20 @@
 ******************************************************************************
 */
 
+/*!
+ * Error codes to be used within the application.
+ * They are represented by an s8
+ */
+#define ERR_NONE     0 /*!< no error occured */
+#define ERR_NOMEM   -1 /*!< not enough memory to perform the requested operation */
+//#define ERR_BUSY    -2 /*!< device or resource busy */
+#define ERR_IO      -3 /*!< generic IO error */
+//#define ERR_TIMEOUT -4 /*!< error due to timeout */
+#define ERR_REQUEST -5 /*!< invalid request or requested function can't be executed at the moment */
+#define ERR_NOMSG   -6 /*!< No message of desired type */
+#define ERR_PARAMS   -7 /*!< Parameter error */
+
+#define ERR_LAST_ERROR -32
 /*! \name AS3911 error codes
  * This are the error codes used by the AS3911 module and its submodules.
  */

@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
@@ -13,13 +13,13 @@
  * not be liable for any loss or damage arising from its use.                *
  *****************************************************************************
  */
- 
+
 /*
  * PROJECT: AS3911 firmware
  * $Revision: $
  * LANGUAGE: ANSI C
  */
- 
+
 /*! \file emv_standard.h
  *
  * \author Oliver Regenfelder
@@ -44,16 +44,16 @@
 #define EMV_STANDARD_H
 
 /*
-******************************************************************************
-* INCLUDES
-******************************************************************************
-*/
+ ******************************************************************************
+ * INCLUDES
+ ******************************************************************************
+ */
 
 /*
-******************************************************************************
-* DEFINES
-******************************************************************************
-*/
+ ******************************************************************************
+ * DEFINES
+ ******************************************************************************
+ */
 
 /*!
  *****************************************************************************
@@ -78,11 +78,17 @@
 #define EMV_T_RESET_MAX         10
 /*! Value of t_reset used (in milliseconds). */
 #define EMV_T_RESET             6
+/*! Minimum value of t_poweroff used (in milliseconds). */
+#define EMV_T_POWEROFF_MIN      15
+/*! Value of t_poweroff used (in milliseconds). */
+#define EMV_T_POWEROFF          16
+/*! Value of t_resetdelay used, between 0 and 33 (in milliseconds). 0 sometimes fails TA305_3.*/
+#define EMV_T_RESETDELAY        1
 
-/*! Frame wait time of RATS for the PCD (microseconds). */
+/*! Frame wait time of RATS for the PCD (carrier cycles). */
 #define EMV_FWT_ACTIVATION_PCD  71680UL
 
-/*! Frame wait time of RATS for the PICC (microseconds). */
+/*! Frame wait time of RATS for the PICC (carrier cycles). */
 #define EMV_FWT_ACTIVATION_PICC 65536UL
 
 /*! Minimum allowed extra guard time for the PCD (carrier cycles). */
@@ -98,6 +104,9 @@
 #define EMV_EGT_PICC_MAX        272
 
 /*! Frame wait time of ATQB for the PCD (carrier cycles). */
+/*
+ * Table A.5 Sequences and Frames in EMVco 2.4
+ */
 #define EMV_FWT_ATQB_PCD        7680
 
 /*! Frame wait time of ATQB for the PICC (carrier cycles). */
@@ -118,7 +127,6 @@
 /*! Minimum PCD frame size supported by the PICC */
 #define EMV_FSD_MIN_PICC       256
 
-
 /*! Minimum PICC frame size integer supported by the PCD */
 #define EMV_FSCI_MIN_PCD        0
 
@@ -134,7 +142,6 @@
 /*! Minimum PICC frame size supported by the PICC */
 #define EMV_FSC_MIN_PICC       32
 
-
 /*! Maximum frame wait integer supported by the PCD */
 #define EMV_FWI_MAX_PCD         14
 
@@ -147,13 +154,18 @@
 /*! Maximum frame wait time allowed for the PICC (carrier cycles).*/
 #define EMV_FWT_MAX_PICC        524288UL
 
-
 /*! Maximum frame guard time integer supported by the PCD */
-#define EMV_SFGI_MAX_PCD        8
+#define EMV_SFGI_MAX_PCD        14
 
 /*! Maximum frame guard time integer supported by the PICC */
 #define EMV_SFGI_MAX_PICC       8
 
+/* The delta frame waiting time changed from a dynamical to a static value
+ * from EMVco 2.3.1 to EMVco 2.4. This value must not be shifted with the 
+ *  FWI. A simple addidtion to the existing FWT (which is shifted) is needed.
+ *  Table A.5 in Annex A.4 Sequences and Frames
+ */
+#define EMV_DELTA_FWT_PCD               49152UL 
 
 /*!
  *****************************************************************************
@@ -176,7 +188,7 @@
  * Default value for the frame guard time integer if TB(1) is not transmitted
  * in the ATS (ISO14443-A).
  *****************************************************************************
- */ 
+ */
 #define EMV_SFGI_DEFAULT        0
 
 /*!
@@ -188,27 +200,51 @@
 #define EMV_FWI_DEFAULT         4
 
 /*
-******************************************************************************
-* GLOBAL MACROS
-******************************************************************************
-*/
+ *****************************************************************************
+ * For a fast FWT calcualtion. 256*16
+ *****************************************************************************
+ */
+#define EMV_FWT_BASE_VALUE                  4096UL
+
+#define EMV_FWT_DELTA                       384UL
 
 /*
-******************************************************************************
-* GLOBAL DATA TYPES
-******************************************************************************
-*/
+ ******************************************************************************
+ * GLOBAL MACROS
+ ******************************************************************************
+ */
 
 /*
-******************************************************************************
-* GLOBAL VARIABLE DECLARATIONS
-******************************************************************************
-*/
+ *****************************************************************************
+ * Calculates the frame waiting time in carrier cycles according to EMVco 2.5a 
+ *****************************************************************************
+ */
+#define EMV_CONVERT_FWT_TO_CARRIER_CYCLES(fwi)  (EMV_FWT_BASE_VALUE << fwi) 
 
 /*
-******************************************************************************
-* GLOBAL FUNCTION PROTOTYPES
-******************************************************************************
-*/
+ *****************************************************************************
+ * Calculates the start-up frame guard time in carrier cycles according to 
+ * EMVco 2.5a 
+ *****************************************************************************
+ */
+#define EMV_CONVERT_SFGT_TO_CARRIER_CYCLES(fwi)  ((EMV_FWT_BASE_VALUE + EMV_FWT_DELTA) << fwi) 
+
+/*
+ ******************************************************************************
+ * GLOBAL DATA TYPES
+ ******************************************************************************
+ */
+
+/*
+ ******************************************************************************
+ * GLOBAL VARIABLE DECLARATIONS
+ ******************************************************************************
+ */
+
+/*
+ ******************************************************************************
+ * GLOBAL FUNCTION PROTOTYPES
+ ******************************************************************************
+ */
 
 #endif /* EMV_STANDARD_H */

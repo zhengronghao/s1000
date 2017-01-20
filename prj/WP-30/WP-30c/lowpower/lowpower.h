@@ -169,6 +169,8 @@ struct LpwrDevice {
 #endif
 
     struct LpwrUART2 uart2;
+    struct LpwrUART2 uart4;
+
     struct LpwrAdc adc;
     struct LpwrSYS sys;
     struct LpwrBEEP beep;

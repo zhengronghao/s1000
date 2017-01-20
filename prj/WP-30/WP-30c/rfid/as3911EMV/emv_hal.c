@@ -57,7 +57,7 @@
  *       actual end of the EOF sequence (the point where the MRT starts).
  *       Please note that the AS3911 uses the ISO14443-2 definition
  *       where the EOF consists of logic '0' followed by sequence Y.
- *
+ * 
  *   64: Adjustment for the MRT timer jitter. Currently the MRT timer
  *       will have any timeout between the set timeout and the set timout
  *       + 64 cycles.
@@ -68,20 +68,36 @@
 /*!
  *****************************************************************************
  * Receiver dead time (in carrier cycles) for the ISO14443B protocol.
- * See [CCP v2.01, PCD 4.8.1.3].
+ * See [CCP v2.3.1, PCD 4.8.1.3].
  *
- * 1024: TR0_MIN
+ * 1008: TR0_MIN
  *
- *  340: Time from the rising edge of the EoS to the starting point
- *       of the MRT timer (sometime after the final high part of the
- *       EoS is completed).
- *
- *   64: Adjustment for the MRT timer jitter. Currently the MRT timer
- *       will have any timeout between the set timeout and the set timout
- *       + 64 cycles.
+ *  -340: Time from the rising edge of the EoS to the starting point
+ *        of the MRT timer (sometime after the final high part of the
+ *        EoS is completed).
+ *       
+ *   -64: Adjustment for the MRT timer jitter. Currently the MRT timer
+ *        will have any timeout between the set timeout and the set timeout
+ *        + 64 cycles.
+ *        
+ *   +64: Adjustment for the TR1PUTMIN.
+ *        The TR1PUTMIN of the AS3911 is 1152/fc (72/fs).
+ *        The test case TB0000 measures the TR1PUTMIN of AS3911 board.
+ *        It takes the default value of TR1PUTMIN (79/fs) and reduces it by
+ *        128/fc in every iteration.
+ *        This results in a TR1PUTMIN of 1136/fc (71/fs) for the second
+ *        iteration. The AS3911 sends a NAK because the TR1PUTMIN of the 
+ *        AS3911 (72/fs) is higher than 71/fs.
+ *        Therefore the test suite assumes TR1PUTMIN of 1264/fc (79/fs)
+ *        The test cases TB340.0 and TB435.0 uses the TR1PUTMIN to send frames
+ *        too early. In order to correctly recognise these frames as being
+ *        sent too early (starting inside reader deaf time), the MRT has to be
+ *        increased by at least 64/fc (8/fs).
+ * 
  *****************************************************************************
  */
-#define EMV_HAL_ISO14443B_RECEIVER_DEADTIME     (1024 - 340 - 64)
+//#define EMV_HAL_ISO14443B_RECEIVER_DEADTIME     (1024 - 340 - 64)
+#define EMV_HAL_ISO14443B_RECEIVER_DEADTIME     (1008 - 340 - 64 + 64)
 
 /*!
  *****************************************************************************
@@ -97,7 +113,8 @@
  * value which has to be used for the AS3911.
  *****************************************************************************
  */
-#define EMV_HAL_TYPE_B_TIMEOUT_ADJUSTMENT    6360
+//#define EMV_HAL_TYPE_B_TIMEOUT_ADJUSTMENT    6360
+#define EMV_HAL_TYPE_B_TIMEOUT_ADJUSTMENT    2784
 
 /*
 ******************************************************************************
@@ -123,6 +140,12 @@ static EmvHalStandard_t emvioActiveStandard;
 static AS3911ModulationLevelMode_t emvHalTypeBModulationLevelMode = AS3911_MODULATION_LEVEL_FIXED;
 static const void *emvHalTypeBModulationLevelModeData = NULL;
 EmvHalTransceiveMode_t gtransceiveMode;
+
+static const void * emvHalLowAGainTable = NULL;
+static const void * emvHalLowBGainTable = NULL;
+static const void * emvHalNormAGainTable = NULL;
+static const void * emvHalNormBGainTable = NULL;
+
 /**@}*/
 
 /*
@@ -197,7 +220,11 @@ s8 emvHalSetStandard(EmvHalStandard_t standard)
 
 
         /* OOK modulation, no tolerant processing of the first byte. */
-        as3911WriteRegister(AS3911_REG_AUX, 0x00);
+//        as3911WriteRegister(AS3911_REG_AUX, 0x00);
+        as3911ModifyRegister(AS3911_REG_AUX
+                            ,AS3911_REG_AUX_no_crc_rx | AS3911_REG_AUX_crc_2_fifo | AS3911_REG_AUX_tr_am | AS3911_REG_AUX_rx_tol
+                            ,0x00);
+
         //mifare 卡后恢复
         as3911ModifyRegister(AS3911_REG_NUM_TX_BYTES2, 0x07, 0);
 
@@ -207,9 +234,12 @@ s8 emvHalSetStandard(EmvHalStandard_t standard)
         /* Set the frame delay time to the minimum allowed PCD frame delay time. */
         as3911SetFrameDelayTime(EMV_FDT_PCD_MIN);
 
+        /* Set proper gain table for used technology */
+        as3911SetGainTables( emvHalLowAGainTable, emvHalNormAGainTable);
+
         /* Disable dynamic adjustment of the modulation level. */
         as3911SetModulationLevelMode(AS3911_MODULATION_LEVEL_FIXED, NULL);
-        as3911WriteRegister(AS3911_REG_RX_CONF3, gtRfidProInfo.gTypeArec);
+        as3911WriteRegister(AS3911_REG_RX_CONF3, gas3911Reg.gTypeArec);
     }
     else if (EMV_HAL_TYPE_B == standard)
     {
@@ -226,7 +256,11 @@ s8 emvHalSetStandard(EmvHalStandard_t standard)
 //        as3911ModifyRegister(AS3911_REG_AM_MOD_DEPTH_CONF, 0x7E, 0x1E);
 
         /* Configure AM modulation for ISO14443B. */
-        as3911WriteRegister(AS3911_REG_AUX, 0x20);
+//        as3911WriteRegister(AS3911_REG_AUX, 0x20);
+        as3911ModifyRegister(AS3911_REG_AUX
+                            ,AS3911_REG_AUX_no_crc_rx | AS3911_REG_AUX_crc_2_fifo | AS3911_REG_AUX_tr_am
+                            ,AS3911_REG_AUX_tr_am);
+
         //mifare 卡后恢复
         as3911ModifyRegister(AS3911_REG_NUM_TX_BYTES2, 0x07, 0);
 
@@ -236,9 +270,12 @@ s8 emvHalSetStandard(EmvHalStandard_t standard)
         /* Set the frame delay time to the minimum allowed PCD frame delay time. */
         as3911SetFrameDelayTime(EMV_FDT_PCD_MIN);
 
+        /* Set proper gain table for used technology */
+        as3911SetGainTables( emvHalLowBGainTable, emvHalNormBGainTable);
+
         /* Enable dynamic adjustment of the modulation level. */
         as3911SetModulationLevelMode(emvHalTypeBModulationLevelMode, emvHalTypeBModulationLevelModeData);
-        as3911WriteRegister(AS3911_REG_RX_CONF3, gtRfidProInfo.gTypeBrec);
+        as3911WriteRegister(AS3911_REG_RX_CONF3, gas3911Reg.gTypeBrec);
     }
     else
     {
@@ -270,7 +307,7 @@ s8 emvHalSetErrorHandling(EmvHalErrorHandling_t errorHandling)
 
         /* Disable detailed anticollision detction.
          * This autmatically enables the enhanced SOF detection.
-         */
+         */ 
         // as3911ModifyRegister(AS3911_REG_ISO14443A_NFC, 0x01, 0x00);
     }
     else
@@ -286,10 +323,37 @@ s8 emvHalActivateField(uchar activateField)
 {
     s8 error = ERR_NONE;
 
+#if 11
+    if (activateField)
+    {
+        error |= as3911ModifyRegister(AS3911_REG_OP_CONTROL, EMV_HAL_REG_OPCONTROL_TXEN_BIT, EMV_HAL_REG_OPCONTROL_TXEN_BIT);
+        as3911AdjustModulationLevel();
+    }
+    else
+    {
+//        s32 i;
+        u8 reg;
+
+        as3911ReadRegister(AS3911_REG_RFO_AM_OFF_LEVEL, &reg);
+
+        as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, 0xff);
+
+        error |= as3911ModifyRegister(AS3911_REG_OP_CONTROL, EMV_HAL_REG_OPCONTROL_TXEN_BIT, 0x00);
+
+        /* Softly re-enable drivers avoid microscopic ringing */
+        as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, 0xfe);
+        as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, 0xfc);
+
+        /* Restore previous value of AS3911_REG_RFO_AM_OFF_LEVEL */
+        as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, reg);
+
+    }
+#else
     if (activateField)
         error |= as3911ModifyRegister(AS3911_REG_OP_CONTROL, EMV_HAL_REG_OPCONTROL_TXEN_BIT, EMV_HAL_REG_OPCONTROL_TXEN_BIT);
     else
         error |= as3911ModifyRegister(AS3911_REG_OP_CONTROL, EMV_HAL_REG_OPCONTROL_TXEN_BIT, 0x00);
+#endif
 
     if (ERR_NONE == error)
         return ERR_NONE;
@@ -314,6 +378,7 @@ s8 emvHalResetField()
 {
     s8 error = ERR_NONE;
 
+    s_DelayUs(EMV_T_RESETDELAY*1000);
     error |= emvHalActivateField(OFF);
     emvHalSleepMilliseconds(EMV_T_RESET);
     error |= emvHalActivateField(ON);
@@ -406,8 +471,17 @@ s8 emvHalSetAs3911TypeBModulationMode(AS3911ModulationLevelMode_t modulationLeve
 {
 	emvHalTypeBModulationLevelMode = modulationLevelMode;
 	emvHalTypeBModulationLevelModeData = modulationLevelModeData;
-
+	
 	return ERR_NONE;
+}
+
+s8 emvHalSetAs3911GainTables(const void * lowA, const void * lowB, const void * normA,const void * normB)
+{
+    emvHalLowAGainTable = lowA;
+    emvHalLowBGainTable = lowB;
+    emvHalNormAGainTable = normA;
+    emvHalNormBGainTable = normB;
+    return ERR_NONE;
 }
 
 void s_as3911_SetInt(uint mode)
@@ -448,7 +522,6 @@ void s_as3911_init(void)
 {
     uint i;
 //    char temp;
-
     EG_mifs_tWorkInfo.RFIDModule = RFID_Module_AS3911;
     s_Rfid_vHalInit();
     s_as3911_SetInt(OFF);
@@ -502,7 +575,7 @@ void s_as3911_init(void)
 
     /* MCU_CLK and LF MCU_CLK off, 27MHz XTAL */
     as3911WriteRegister(AS3911_REG_IO_CONF1, 0x0F);
-//    as3911WriteRegister(AS3911_REG_IO_CONF2, 0x80);
+    as3911WriteRegister(AS3911_REG_IO_CONF2, 0x00);
     /* Enable Oscillator, Transmitter and receiver. */
 //    as3911WriteRegister(AS3911_REG_OP_CONTROL, 0xC8);
     as3911WriteRegister(AS3911_REG_OP_CONTROL, 0xD8);
@@ -525,8 +598,9 @@ void s_as3911_init(void)
     as3911SetGainMode(AS3911_GAIN_FIXED, NULL);
 
     as3911WriteRegister(AS3911_REG_RFO_AM_OFF_LEVEL, 0x00); //根据硬件调节0x9F
-    as3911WriteRegister(AS3911_REG_ANT_CAL_CONF, 0x80); //0x21 设置最大
-    as3911ModifyRegister(AS3911_REG_RX_CONF3, 0xE0, 0x00);
+    as3911WriteRegister(AS3911_REG_ANT_CAL_CONTROL, 0x80); //0x21 设置最大
+    as3911ModifyRegister(AS3911_REG_RX_CONF3, 0xE0, 0xE0);
+//    as3911WriteRegister(AS3911_REG_RX_CONF1, 0x40); //修改0AH bit6 针对C测试机
 
     s_as3911_SetInt(ON);
 }

@@ -57,6 +57,7 @@
 #define EMV_ERR_TIMEOUT         -4 /*!< Timeout occured while waiting for a card response. */
 #define EMV_ERR_INTERNAL        -5 /*!< EMV software stack internal error. */
 #define EMV_ERR_STOPPED         -6 /*!< Stop current operation request received. */
+#define EMV_ERR_POWEROFF_REQ    -7 /*!< Power off requested */
 /**@}*/
 
 /*

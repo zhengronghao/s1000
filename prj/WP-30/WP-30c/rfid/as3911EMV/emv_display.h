@@ -39,6 +39,13 @@
 //#include "ams_types.h"
 #include "wp30_ctrl.h"
 
+//#define as3911_debug
+#ifdef as3911_debug
+#define emvPrintf(...)    Dprintk(__VA_ARGS__)
+#else
+#define emvPrintf(...)    {}
+#endif
+
 #if defined(EMV_AS3911)
 /*
 ******************************************************************************

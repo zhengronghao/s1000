@@ -98,8 +98,8 @@ s8 emvPrelayer4Transceive(const u8 *request, size_t requestLength, u8* response,
     {
         s8 error = EMV_ERR_OK;
 
-        if (emvStopRequestReceived())
-            return EMV_ERR_STOPPED;
+//        if (emvStopRequestReceived())
+//            return EMV_ERR_STOPPED;
 
         error = emvHalTransceive((u8 *)request, requestLength, response, maxResponseLength
             , responseLength, timeout, transceiveMode);

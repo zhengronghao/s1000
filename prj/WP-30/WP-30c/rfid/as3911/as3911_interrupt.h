@@ -1,6 +1,6 @@
 /*
  *****************************************************************************
- * Copyright @ 2009 by                                 *
+ * Copyright @ 2009 by austriamicrosystems AG                                *
  * All rights are reserved.                                                  *
  *                                                                           *
  * Reproduction in whole or in part is prohibited without the written consent*
